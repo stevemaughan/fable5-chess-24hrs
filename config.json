@@ -51,16 +51,16 @@
         "append_file": true
     },
     "sprt": {
-        "alpha": 0.0,
-        "beta": 0.0,
+        "alpha": 0.05,
+        "beta": 0.05,
         "elo0": 0.0,
-        "elo1": 0.0,
+        "elo1": 10.0,
         "model": "normalized",
-        "enabled": false
+        "enabled": true
     },
     "config_name": "config.json",
     "output": 0,
-    "seed": 10787098682098159743,
+    "seed": 14146208498600486853,
     "variant": 0,
     "type": 0,
     "gauntlet_seeds": 1,
@@ -69,7 +69,7 @@
     "wait": 0,
     "autosaveinterval": 20,
     "games": 2,
-    "rounds": 60,
+    "rounds": 1500,
     "concurrency": 10,
     "force_concurrency": false,
     "recover": true,
@@ -89,9 +89,9 @@
     },
     "engines": [
         {
-            "name": "fable",
+            "name": "new",
             "dir": "",
-            "cmd": "source\\build\\v8.exe",
+            "cmd": "source\\build\\v11.exe",
             "args": "",
             "restart": false,
             "options": [
@@ -114,9 +114,9 @@
             "variant": 0
         },
         {
-            "name": "stash25",
+            "name": "old",
             "dir": "",
-            "cmd": "resources\\engines\\stash-25.0-windows-x86_64-bmi2.exe",
+            "cmd": "source\\build\\v8.exe",
             "args": "",
             "restart": false,
             "options": [
@@ -140,16 +140,16 @@
         }
     ],
     "stats": {
-        "fable vs stash25": {
-            "wins": 47,
-            "losses": 45,
-            "draws": 28,
-            "penta_WW": 7,
-            "penta_WD": 12,
-            "penta_WL": 21,
-            "penta_DD": 4,
-            "penta_LD": 8,
-            "penta_LL": 8
+        "new vs old": {
+            "wins": 292,
+            "losses": 218,
+            "draws": 428,
+            "penta_WW": 31,
+            "penta_WD": 131,
+            "penta_WL": 99,
+            "penta_DD": 98,
+            "penta_LD": 101,
+            "penta_LL": 9
         }
     }
 }
