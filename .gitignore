@@ -1,0 +1,37 @@
+# Read-only benchmark inputs (large binaries / book) — never committed
+resources/
+
+# Build artefacts
+source/build/
+*.o
+*.obj
+*.a
+*.lib
+*.exe
+*.pdb
+*.gcda
+*.gcno
+*.profraw
+*.profdata
+zig-cache/
+.zig-cache/
+zig-out/
+
+# Match output and logs
+*.pgn
+*.log
+source/tests/*.pgn
+
+# Large tuning / temp data
+*.bin
+*.epd.gz
+*.tmp
+
+# Editor / OS noise
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# The deliverable itself IS tracked (audit trail of what was in final/ over time)
+!final/Fable5chess24hrs.exe
