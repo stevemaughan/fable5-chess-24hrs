@@ -827,7 +827,14 @@ static atomic<bool> searching(false);
 
 static Move killers[MAX_PLY][2];
 static int historyTab[2][64][64];
+static int16_t contHist[12][64][12][64];   // [prevPiece][prevTo][piece][to]
+static uint8_t pieceStack[MAX_PLY + 2];
 static Move counterMove[2][64][64];
+static inline void gravity(int& h, int bonus) { h += bonus - h * (bonus > 0 ? bonus : -bonus) / 16384; }
+static inline void gravity16(int16_t& h, int bonus) {
+    int v = h + bonus - (int)h * (bonus > 0 ? bonus : -bonus) / 16384;
+    h = (int16_t)v;
+}
 static Move pvTable[MAX_PLY][MAX_PLY];
 static int pvLen[MAX_PLY];
 static int lmrTable[64][64];
@@ -856,6 +863,10 @@ static const int mvvValue[7] = { 100, 320, 330, 500, 900, 10000, 0 };
 
 static void scoreMoves(const Position& pos, MoveList& list, Move ttMove, int ply, Move prev) {
     Move counter = prev ? counterMove[pos.stm][moveFrom(prev)][moveTo(prev)] : 0;
+    const int16_t* ch1 = (ply >= 1 && moveStack[ply - 1])
+        ? &contHist[pieceStack[ply - 1]][moveTo(moveStack[ply - 1])][0][0] : nullptr;
+    const int16_t* ch2 = (ply >= 2 && moveStack[ply - 2])
+        ? &contHist[pieceStack[ply - 2]][moveTo(moveStack[ply - 2])][0][0] : nullptr;
     for (int i = 0; i < list.n; i++) {
         Move m = list.m[i].move;
         if (m == ttMove) { list.m[i].score = 1 << 30; continue; }
@@ -875,7 +886,11 @@ static void scoreMoves(const Position& pos, MoveList& list, Move ttMove, int ply
         } else if (m == counter) {
             list.m[i].score = 78000000;
         } else {
-            list.m[i].score = historyTab[pos.stm][moveFrom(m)][moveTo(m)];
+            int sc = historyTab[pos.stm][moveFrom(m)][moveTo(m)];
+            int pc = pos.board[moveFrom(m)];
+            if (ch1) sc += ch1[pc * 64 + moveTo(m)];
+            if (ch2) sc += ch2[pc * 64 + moveTo(m)];
+            list.m[i].score = sc;
         }
     }
 }
@@ -938,6 +953,8 @@ static int qsearch(Position& pos, int alpha, int beta, int ply) {
         }
         pos.makeMove(m);
         if (pos.lastMoveIllegal()) { pos.unmakeMove(m); continue; }
+        moveStack[ply] = m;
+        pieceStack[ply] = pos.board[moveTo(m)];
         int score = -qsearch(pos, -beta, -alpha, ply + 1);
         pos.unmakeMove(m);
         if (stopFlag) return 0;
@@ -1073,6 +1090,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         if (pos.lastMoveIllegal()) { pos.unmakeMove(m); continue; }
         legal++;
         moveStack[ply] = m;
+        pieceStack[ply] = pos.board[moveTo(m)];
         if (quiet && nQuiets < 64) quietsTried[nQuiets++] = m;
 
         int score;
@@ -1084,7 +1102,10 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
                 r = lmrTable[depth < 64 ? depth : 63][legal < 64 ? legal : 63];
                 if (isPV && r > 0) r--;
                 if (!improving) r++;
-                r -= historyTab[pos.stm ^ 1][moveFrom(m)][moveTo(m)] / 6000;
+                int hadj = list.m[i].score / 6000;
+                if (hadj > 2) hadj = 2;
+                if (hadj < -2) hadj = -2;
+                r -= hadj;
                 if (r < 0) r = 0;
                 if (r > depth - 2) r = depth - 2;
             }
@@ -1115,14 +1136,18 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
                         }
                         if (prevMove)
                             counterMove[pos.stm][moveFrom(prevMove)][moveTo(prevMove)] = m;
-                        int bonus = depth * depth < 400 ? depth * depth : 400;
-                        int& h = historyTab[pos.stm][moveFrom(m)][moveTo(m)];
-                        h += bonus;
-                        if (h > 16384) h = 16384;
-                        for (int q = 0; q < nQuiets - 1; q++) {
-                            int& hq = historyTab[pos.stm][moveFrom(quietsTried[q])][moveTo(quietsTried[q])];
-                            hq -= bonus;
-                            if (hq < 0) hq = 0;
+                        int bonus = depth * depth < 1200 ? depth * depth + 30 : 1200;
+                        int16_t* uch1 = (ply >= 1 && moveStack[ply - 1])
+                            ? &contHist[pieceStack[ply - 1]][moveTo(moveStack[ply - 1])][0][0] : nullptr;
+                        int16_t* uch2 = (ply >= 2 && moveStack[ply - 2])
+                            ? &contHist[pieceStack[ply - 2]][moveTo(moveStack[ply - 2])][0][0] : nullptr;
+                        for (int q = 0; q < nQuiets; q++) {
+                            Move qm = quietsTried[q];
+                            int b = (qm == m) ? bonus : -bonus;
+                            gravity(historyTab[pos.stm][moveFrom(qm)][moveTo(qm)], b);
+                            int qpc = pos.board[moveFrom(qm)];
+                            if (uch1) gravity16(uch1[qpc * 64 + moveTo(qm)], b);
+                            if (uch2) gravity16(uch2[qpc * 64 + moveTo(qm)], b);
                         }
                     }
                     break;
@@ -1399,6 +1424,7 @@ static void uciLoop() {
             memset(historyTab, 0, sizeof(historyTab));
             memset(killers, 0, sizeof(killers));
             memset(counterMove, 0, sizeof(counterMove));
+            memset(contHist, 0, sizeof(contHist));
         } else if (cmd == "setoption") {
             string tok, name, value;
             ss >> tok;   // "name"
@@ -1473,6 +1499,40 @@ static void uciLoop() {
                 chrono::steady_clock::now() - t0).count();
             printf("bench: nodes %llu time %lld ms nps %lld\n", (unsigned long long)total,
                    (long long)ms, ms > 0 ? (long long)(total * 1000 / ms) : 0);
+            fflush(stdout);
+        } else if (cmd == "eval") {
+            printf("static eval (stm pov): %d\n", evaluate(rootPos));
+            fflush(stdout);
+        } else if (cmd == "symtest") {
+            static const char* symFens[] = {
+                "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                "r1bq1rk1/pp2ppbp/2np1np1/8/3NP3/2N1BP2/PPPQ2PP/R3KB1R w KQ - 5 9",
+                "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+                "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+                "2kr3r/pp3p2/2n1b2p/2pp2p1/6P1/2PP1N1P/PP2PP2/R1B1K2R w KQ - 0 14",
+                "8/8/1p1k4/p1p2p2/P1P2P1p/1P1K3P/8/8 w - - 0 40",
+                "6k1/5ppp/1q6/8/8/2N5/5PPP/3Q2K1 w - - 0 1",
+                "4k3/8/8/8/8/8/PPP5/4K3 w - - 0 1",
+            };
+            int bad = 0;
+            for (auto f : symFens) {
+                Position a, b;
+                a.setFen(f);
+                b.setFen(f);
+                // mirror b: flip ranks, swap colors
+                memset(b.byType, 0, sizeof(b.byType));
+                memset(b.byColor, 0, sizeof(b.byColor));
+                for (int i = 0; i < 64; i++) b.board[i] = NO_PIECE;
+                for (int s = 0; s < 64; s++)
+                    if (a.board[s] != NO_PIECE)
+                        b.put((a.board[s] + 6) % 12, s ^ 56);
+                b.stm = a.stm ^ 1;
+                b.castling = ((a.castling & 3) << 2) | ((a.castling >> 2) & 3);
+                b.ep = a.ep >= 0 ? (a.ep ^ 56) : -1;
+                int ea = evaluate(a), eb = evaluate(b);
+                if (ea != eb) { bad++; printf("ASYM %d vs %d: %s\n", ea, eb, f); }
+            }
+            printf("symtest: %d asymmetries\n", bad);
             fflush(stdout);
         } else if (cmd == "perfttest") {
             string path;
