@@ -795,7 +795,7 @@ struct TTEntry {
     Move move;
     int8_t depth;
     uint8_t flag;
-    int16_t pad;
+    int16_t eval;
 };
 static TTEntry* tt = nullptr;
 static size_t ttMask = 0;
@@ -929,10 +929,12 @@ static int qsearch(Position& pos, int alpha, int beta, int ply) {
 
     bool inCheck = pos.inCheck();
     int best;
+    int standPat = -32001;
     if (inCheck) {
         best = -MATE + ply;   // if no evasions found → mate
     } else {
-        best = evaluate(pos);
+        standPat = (e.key == pos.key && e.eval != -32001) ? e.eval : evaluate(pos);
+        best = standPat;
         if (best >= beta) return best;
         if (best > alpha) alpha = best;
     }
@@ -975,6 +977,7 @@ static int qsearch(Position& pos, int alpha, int beta, int ply) {
     if (e.key != pos.key || e.depth <= 0) {
         e.key = pos.key; e.score = (int16_t)s2; e.move = bestMove;
         e.depth = 0; e.flag = (uint8_t)flag;
+        e.eval = (int16_t)standPat;
     }
     return best;
 }
@@ -1034,20 +1037,35 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
     // internal iterative reduction
     if (depth >= 4 && !ttMove && !excluded) depth--;
 
-    int staticEval = evaluate(pos);
+    bool ttHit = (e.key == pos.key);
+    int staticEval = (ttHit && e.eval != -32001) ? e.eval : evaluate(pos);
     evalStack[ply] = staticEval;
+    // refine eval with TT score when its bound applies
+    int refEval = staticEval;
+    if (ttHit && !excluded && e.score > -MATE_BOUND && e.score < MATE_BOUND) {
+        if ((e.flag == TT_LOWER && e.score > refEval) ||
+            (e.flag == TT_UPPER && e.score < refEval) ||
+            e.flag == TT_EXACT)
+            refEval = e.score;
+    }
     bool improving = !inCheck && ply >= 2 && staticEval > evalStack[ply - 2];
+
+    // razoring
+    if (!isPV && !inCheck && depth <= 2 && refEval + 250 * depth <= alpha) {
+        int v = qsearch(pos, alpha, alpha + 1, ply);
+        if (v <= alpha) return v;
+    }
 
     // reverse futility pruning
     if (!isPV && !inCheck && depth <= 6
-        && staticEval - 90 * depth + (improving ? 50 : 0) >= beta
+        && refEval - 90 * depth + (improving ? 50 : 0) >= beta
         && abs(beta) < MATE_BOUND)
-        return staticEval;
+        return refEval;
 
     // null move pruning
-    if (!isPV && !inCheck && doNull && !excluded && depth >= 3 && staticEval >= beta
+    if (!isPV && !inCheck && doNull && !excluded && depth >= 3 && refEval >= beta
         && (pos.byColor[pos.stm] & ~(pos.byType[PAWN] | pos.byType[KING]))) {
-        int R = 3 + depth / 5;
+        int R = 3 + depth / 5 + ((refEval - beta) > 300 ? 1 : 0);
         moveStack[ply] = 0;
         pos.makeNull();
         int score = -search(pos, depth - 1 - R, ply + 1, -beta, -beta + 1, false);
@@ -1187,6 +1205,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         if (e.key != pos.key || depth >= e.depth || flag == TT_EXACT) {
             e.key = pos.key; e.score = (int16_t)s; e.move = bestMove;
             e.depth = (int8_t)depth; e.flag = (uint8_t)flag;
+            e.eval = (int16_t)(inCheck ? -32001 : staticEval);
         }
     }
     return best;

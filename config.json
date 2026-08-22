@@ -141,14 +141,14 @@
     ],
     "stats": {
         "new vs old": {
-            "wins": 48,
-            "losses": 16,
-            "draws": 14,
-            "penta_WW": 13,
-            "penta_WD": 10,
-            "penta_WL": 12,
-            "penta_DD": 1,
-            "penta_LD": 2,
+            "wins": 69,
+            "losses": 21,
+            "draws": 28,
+            "penta_WW": 18,
+            "penta_WD": 17,
+            "penta_WL": 16,
+            "penta_DD": 4,
+            "penta_LD": 3,
             "penta_LL": 1
         }
     }
