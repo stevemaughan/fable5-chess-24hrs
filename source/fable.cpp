@@ -183,7 +183,12 @@ struct Position {
 
     U64 occ() const { return byColor[0] | byColor[1]; }
     U64 pieces(int c, int t) const { return byColor[c] & byType[t]; }
-    int kingSq(int c) const { return lsb(pieces(c, KING)); }
+    int kingSq(int c) const {
+#ifdef DEBUGCHK
+        if (!pieces(c, KING)) { fprintf(stderr, "KING GONE c=%d histPly=%d\n", c, histPly); fflush(stderr); *(volatile int*)0 = 0; }
+#endif
+        return lsb(pieces(c, KING));
+    }
 
     void put(int pc, int s) {
         board[s] = (uint8_t)pc;
@@ -630,6 +635,25 @@ static const int egKing[64] = {
     -53, -34, -21, -11, -28, -14, -24, -43,
 };
 
+static U64 fileMask[8], adjFileMask[8], passedMask[2][64];
+static void initEvalMasks() {
+    for (int f = 0; f < 8; f++) {
+        fileMask[f] = FILE_A << f;
+        adjFileMask[f] = 0;
+        if (f > 0) adjFileMask[f] |= FILE_A << (f - 1);
+        if (f < 7) adjFileMask[f] |= FILE_A << (f + 1);
+    }
+    for (int s = 0; s < 64; s++) {
+        int f = s & 7, r = s >> 3;
+        U64 span = fileMask[f] | adjFileMask[f];
+        U64 ahead = 0, behind = 0;
+        for (int rr = r + 1; rr < 8; rr++) ahead |= 0xFFULL << (8 * rr);
+        for (int rr = 0; rr < r; rr++) behind |= 0xFFULL << (8 * rr);
+        passedMask[WHITE][s] = span & ahead;
+        passedMask[BLACK][s] = span & behind;
+    }
+}
+
 static int mgTable[12][64], egTable[12][64];
 static void initEval() {
     const int* mgT[6] = { mgPawn, mgKnight, mgBishop, mgRook, mgQueen, mgKing };
@@ -654,24 +678,109 @@ static int evaluate(const Position& pos) {
         if (wm <= 1 && bm <= 1) return 0;
     }
     int mg = 0, eg = 0, phase = 0;
-    U64 w = pos.byColor[WHITE];
-    U64 b = w;
-    b = pos.byColor[BLACK];
-    U64 pcs = w;
-    while (pcs) {
-        int s = poplsb(pcs);
-        int p = pos.board[s];
-        mg += mgTable[p][s];
-        eg += egTable[p][s];
-        phase += gamephaseInc[p % 6];
+    U64 occ = pos.occ();
+    static const int passedMg[8] = { 0, 2, 6, 12, 25, 50, 90, 0 };
+    static const int passedEg[8] = { 0, 8, 15, 30, 55, 100, 160, 0 };
+    static const int kingAttW[6] = { 0, 2, 2, 3, 5, 0 };
+
+    for (int c = 0; c < 2; c++) {
+        int sign = (c == WHITE) ? 1 : -1;
+        U64 ourPawns = pos.pieces(c, PAWN);
+        U64 theirPawns = pos.pieces(c ^ 1, PAWN);
+        U64 allPawns = ourPawns | theirPawns;
+        U64 theirPawnAtt = (c == WHITE)
+            ? (((theirPawns & ~FILE_A) >> 9) | ((theirPawns & ~FILE_H) >> 7))
+            : (((theirPawns & ~FILE_A) << 7) | ((theirPawns & ~FILE_H) << 9));
+        U64 mobArea = ~pos.byColor[c] & ~theirPawnAtt;
+        int theirKing = pos.kingSq(c ^ 1);
+        U64 kingZone = kingAtt[theirKing] | (1ULL << theirKing);
+        int attackers = 0, attackWeight = 0;
+        int cmg = 0, ceg = 0;
+
+        U64 bb = ourPawns;
+        while (bb) {
+            int s = poplsb(bb);
+            int p = pos.board[s];
+            cmg += mgTable[p][s]; ceg += egTable[p][s];
+            int f = s & 7, r = s >> 3;
+            int relRank = (c == WHITE) ? r : 7 - r;
+            if (!(passedMask[c][s] & theirPawns)) {
+                cmg += passedMg[relRank]; ceg += passedEg[relRank];
+            }
+            if (!(adjFileMask[f] & ourPawns)) { cmg -= 11; ceg -= 8; }
+            if (passedMask[c][s] & fileMask[f] & ourPawns) { cmg -= 8; ceg -= 14; }
+        }
+        bb = pos.pieces(c, KNIGHT);
+        while (bb) {
+            int s = poplsb(bb);
+            cmg += mgTable[c * 6 + KNIGHT][s]; ceg += egTable[c * 6 + KNIGHT][s];
+            phase += 1;
+            U64 att = knightAtt[s];
+            int cnt = popcnt(att & mobArea);
+            cmg += (cnt - 4) * 4; ceg += (cnt - 4) * 4;
+            if (att & kingZone) { attackers++; attackWeight += kingAttW[KNIGHT]; }
+        }
+        bb = pos.pieces(c, BISHOP);
+        if (popcnt(bb) >= 2) { cmg += 28; ceg += 45; }
+        while (bb) {
+            int s = poplsb(bb);
+            cmg += mgTable[c * 6 + BISHOP][s]; ceg += egTable[c * 6 + BISHOP][s];
+            phase += 1;
+            U64 att = bishopAtt(s, occ);
+            int cnt = popcnt(att & mobArea);
+            cmg += (cnt - 6) * 3; ceg += (cnt - 6) * 3;
+            if (att & kingZone) { attackers++; attackWeight += kingAttW[BISHOP]; }
+        }
+        bb = pos.pieces(c, ROOK);
+        while (bb) {
+            int s = poplsb(bb);
+            cmg += mgTable[c * 6 + ROOK][s]; ceg += egTable[c * 6 + ROOK][s];
+            phase += 2;
+            U64 att = rookAtt(s, occ);
+            int cnt = popcnt(att & mobArea);
+            cmg += (cnt - 7) * 2; ceg += (cnt - 7) * 4;
+            int f = s & 7;
+            if (!(fileMask[f] & allPawns)) { cmg += 25; ceg += 10; }
+            else if (!(fileMask[f] & ourPawns)) { cmg += 12; ceg += 5; }
+            if (att & kingZone) { attackers++; attackWeight += kingAttW[ROOK]; }
+        }
+        bb = pos.pieces(c, QUEEN);
+        while (bb) {
+            int s = poplsb(bb);
+            cmg += mgTable[c * 6 + QUEEN][s]; ceg += egTable[c * 6 + QUEEN][s];
+            phase += 4;
+            U64 att = queenAtt(s, occ);
+            int cnt = popcnt(att & mobArea);
+            cmg += (cnt - 13); ceg += (cnt - 13) * 2;
+            if (att & kingZone) { attackers++; attackWeight += kingAttW[QUEEN]; }
+        }
+        {
+            int s = pos.kingSq(c);
+            cmg += mgTable[c * 6 + KING][s]; ceg += egTable[c * 6 + KING][s];
+            // pawn shield (mg only)
+            int kf = s & 7;
+            if (kf == 0) kf = 1;
+            if (kf == 7) kf = 6;
+            for (int f = kf - 1; f <= kf + 1; f++) {
+                U64 fp = fileMask[f] & ourPawns;
+                if (!fp) { cmg -= 9; continue; }
+                int psq, pr;
+                if (c == WHITE) { psq = lsb(fp); pr = psq >> 3; }
+                else { psq = 63 - (int)_lzcnt_u64(fp); pr = 7 - (psq >> 3); }
+                (void)psq;
+                if (pr == 1) cmg += 8;
+                else if (pr == 2) cmg += 3;
+            }
+        }
+        if (attackers >= 2) {
+            int danger = attackWeight * attackWeight;
+            if (danger > 300) danger = 300;
+            cmg += danger;   // we are ATTACKING their king: bonus for us
+        }
+        mg += sign * cmg;
+        eg += sign * ceg;
     }
-    while (b) {
-        int s = poplsb(b);
-        int p = pos.board[s];
-        mg -= mgTable[p][s];
-        eg -= egTable[p][s];
-        phase += gamephaseInc[p % 6];
-    }
+
     if (phase > 24) phase = 24;
     int score = (mg * phase + eg * (24 - phase)) / 24;
     score = (pos.stm == WHITE) ? score : -score;
@@ -822,6 +931,11 @@ static int qsearch(Position& pos, int alpha, int beta, int ply) {
         Move m = pickMove(list, i);
         if (!inCheck && list.m[i].score < 0 && best > -MATE_BOUND)
             break;   // losing captures: prune
+        // delta pruning
+        if (!inCheck && moveType(m) != MT_PROMO && best > -MATE_BOUND) {
+            int victim = (moveType(m) == MT_EP) ? PAWN : pos.board[moveTo(m)] % 6;
+            if (best + seeVal[victim] + 150 < alpha) continue;
+        }
         pos.makeMove(m);
         if (pos.lastMoveIllegal()) { pos.unmakeMove(m); continue; }
         int score = -qsearch(pos, -beta, -alpha, ply + 1);
@@ -947,6 +1061,12 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
             if (depth <= 4 && legal > lmpLimit) continue;
             // futility pruning
             if (depth <= 6 && staticEval + 120 + 110 * depth <= alpha) continue;
+        }
+        // SEE pruning
+        if (legal >= 1 && best > -MATE_BOUND && depth <= 8) {
+            if (isCapture) {
+                if (list.m[i].score < 0 && see(pos, m) < -100 * depth) continue;
+            } else if (!isPV && !inCheck && see(pos, m) < -60 * depth) continue;
         }
 
         pos.makeMove(m);
@@ -1074,6 +1194,7 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
 
     Move bestMove = 0;
     int lastScore = 0;
+    int stability = 0;
     rootBestMove = 0;
 
     for (int depth = 1; depth <= maxDepth; depth++) {
@@ -1088,7 +1209,11 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
             else if (score >= beta) { beta += delta; delta *= 3; if (beta > MATE) beta = MATE; }
             else break;
         }
-        if (rootBestMove) bestMove = rootBestMove;
+        if (rootBestMove) {
+            if (rootBestMove == bestMove) { if (stability < 8) stability++; }
+            else stability = 0;
+            bestMove = rootBestMove;
+        }
         if (stopFlag && depth > 1) break;
 
         lastScore = score;
@@ -1110,7 +1235,11 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
             sendLine(out.str());
         }
         if (stopFlag) break;
-        if (si.hardLimitOn && gp.movetime <= 0 && ms > si.softMs) break;
+        if (si.hardLimitOn && gp.movetime <= 0) {
+            static const int stabPct[9] = { 160, 130, 115, 100, 95, 85, 80, 80, 80 };
+            long long adjSoft = si.softMs * stabPct[stability] / 100;
+            if (ms > adjSoft) break;
+        }
         if (si.hardLimitOn && gp.movetime > 0 && ms >= si.softMs) break;
         if (abs(score) > MATE_BOUND && depth >= 12) break;
     }
@@ -1316,6 +1445,35 @@ static void uciLoop() {
             searching = true;
             iterativeDeepening(rootPos, gp);
             searching = false;
+        } else if (cmd == "bench") {
+            static const char* benchFens[] = {
+                "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                "r1bq1rk1/pp2ppbp/2np1np1/8/3NP3/2N1BP2/PPPQ2PP/R3KB1R w KQ - 5 9",
+                "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+                "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+                "r2q1rk1/ppp2ppp/3bbn2/3p4/8/1P1P2P1/PBPN1PBP/R2Q1RK1 b - - 3 10",
+                "2kr3r/pp3p2/2n1b2p/2pp2p1/6P1/2PP1N1P/PP2PP2/R1B1K2R w KQ - 0 14",
+                "8/8/1p1k4/p1p2p2/P1P2P1p/1P1K3P/8/8 w - - 0 40",
+                "6k1/5ppp/1q6/8/8/2N5/5PPP/3Q2K1 w - - 0 1",
+            };
+            U64 total = 0;
+            auto t0 = chrono::steady_clock::now();
+            stopFlag = false;
+            for (auto f : benchFens) {
+                Position p;
+                p.setFen(f);
+                si.nodes = 0; si.seldepth = 0;
+                si.start = chrono::steady_clock::now();
+                si.hardLimitOn = false;
+                rootBestMove = 0;
+                for (int d = 1; d <= 12; d++) search(p, d, 0, -MATE, MATE, true);
+                total += si.nodes;
+            }
+            auto ms = chrono::duration_cast<chrono::milliseconds>(
+                chrono::steady_clock::now() - t0).count();
+            printf("bench: nodes %llu time %lld ms nps %lld\n", (unsigned long long)total,
+                   (long long)ms, ms > 0 ? (long long)(total * 1000 / ms) : 0);
+            fflush(stdout);
         } else if (cmd == "perfttest") {
             string path;
             ss >> path;
@@ -1330,6 +1488,7 @@ int main(int argc, char** argv) {
     initAttacks();
     initCastleMask();
     initZobrist();
+    initEvalMasks();
     initEval();
     initLmr();
     ttResize(64);

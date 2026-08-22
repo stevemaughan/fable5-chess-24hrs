@@ -13,3 +13,22 @@ Start: 2026-08-22T14:06:25 (local). Deadline: 2026-08-23T14:06:25.
   match, install into final/.
 
 Assumptions noted as they arise. All decisions recorded here hourly.
+
+## Firsts
+- **Full perft suite passed: 2026-08-22 ~14:15 (elapsed ~0:09).** 126/126
+  positions, 3.73B nodes, 52 Mnps (O2 build), zero failures, first attempt.
+- **First full legal games: 2026-08-22 ~14:23** (60-game smoke match vs
+  stash-20 at 10+0.1: 60% score, +70 Elo, 0 crashes/timeouts/illegal moves).
+
+## Hour 1 — 2026-08-22 15:00 (approx, written 14:50)
+- Wrote complete v1 engine in C++ (single file ~1100 lines): bitboards, PEXT
+  sliders, pseudo-legal movegen + legality filter, Zobrist, make/unmake,
+  PeSTO tapered eval, PVS search with TT/null-move/LMR/killers/history/
+  aspiration, qsearch with check evasions, time management, UCI with reader
+  thread.
+- Perft suite: 126/126 pass. fastchess --compliance: all 40 checks pass.
+- Static -O3 -flto build in final/ (Fable5chess24hrs.exe). ~4.5 Mnps search.
+- Fixed: castleMask init missing; premature quit race in cmd queue.
+- Next: smoke match vs stash-20 at 10+0.1 to check stability + clock handling,
+  then estimate Elo and start strength iterations (SEE, TT in qsearch, better
+  pruning, eval terms).
