@@ -840,6 +840,7 @@ static int pvLen[MAX_PLY];
 static int lmrTable[64][64];
 static int evalStack[MAX_PLY];
 static Move moveStack[MAX_PLY + 2];
+static Move excludedAt[MAX_PLY + 2];
 static Move rootBestMove = 0;
 
 static void initLmr() {
@@ -1012,10 +1013,12 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
     checkTime();
     if (stopFlag) return 0;
 
+    Move excluded = excludedAt[ply];
+
     // TT probe
     TTEntry& e = tt[pos.key & ttMask];
     Move ttMove = 0;
-    if (e.key == pos.key) {
+    if (e.key == pos.key && !excluded) {
         ttMove = e.move;
         if (!isPV && e.depth >= depth) {
             int s = e.score;
@@ -1029,7 +1032,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
     }
 
     // internal iterative reduction
-    if (depth >= 4 && !ttMove) depth--;
+    if (depth >= 4 && !ttMove && !excluded) depth--;
 
     int staticEval = evaluate(pos);
     evalStack[ply] = staticEval;
@@ -1042,7 +1045,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         return staticEval;
 
     // null move pruning
-    if (!isPV && !inCheck && doNull && depth >= 3 && staticEval >= beta
+    if (!isPV && !inCheck && doNull && !excluded && depth >= 3 && staticEval >= beta
         && (pos.byColor[pos.stm] & ~(pos.byType[PAWN] | pos.byType[KING]))) {
         int R = 3 + depth / 5;
         moveStack[ply] = 0;
@@ -1054,6 +1057,20 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
     }
 
     Move prevMove = ply > 0 ? moveStack[ply - 1] : 0;
+
+    // singular extension / multicut
+    int singularExt = 0;
+    if (!isRoot && !excluded && depth >= 8 && ttMove && e.key == pos.key
+        && e.depth >= depth - 3 && e.flag != TT_UPPER
+        && e.score > -MATE_BOUND && e.score < MATE_BOUND) {
+        int sBeta = e.score - 2 * depth;
+        excludedAt[ply] = ttMove;
+        int sScore = search(pos, (depth - 1) / 2, ply, sBeta - 1, sBeta, false);
+        excludedAt[ply] = 0;
+        if (stopFlag) return 0;
+        if (sScore < sBeta) singularExt = 1;
+        else if (sBeta >= beta) return sBeta;   // multicut
+    }
 
     MoveList list;
     pos.genMoves(list, false);
@@ -1069,6 +1086,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
 
     for (int i = 0; i < list.n; i++) {
         Move m = pickMove(list, i);
+        if (m == excluded) continue;
         bool isCapture = pos.board[moveTo(m)] != NO_PIECE || moveType(m) == MT_EP;
         bool isPromo = moveType(m) == MT_PROMO;
         bool quiet = !isCapture && !isPromo;
@@ -1087,15 +1105,17 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         }
 
         pos.makeMove(m);
+        __builtin_prefetch(&tt[pos.key & ttMask]);
         if (pos.lastMoveIllegal()) { pos.unmakeMove(m); continue; }
         legal++;
         moveStack[ply] = m;
         pieceStack[ply] = pos.board[moveTo(m)];
         if (quiet && nQuiets < 64) quietsTried[nQuiets++] = m;
+        int ext = (m == ttMove) ? singularExt : 0;
 
         int score;
         if (legal == 1) {
-            score = -search(pos, depth - 1, ply + 1, -beta, -alpha, true);
+            score = -search(pos, depth - 1 + ext, ply + 1, -beta, -alpha, true);
         } else {
             int r = 0;
             if (quiet && depth >= 3 && legal > 3) {
@@ -1156,16 +1176,18 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         }
     }
 
-    if (!legal) return inCheck ? -MATE + ply : 0;
+    if (!legal) return excluded ? alpha : (inCheck ? -MATE + ply : 0);
 
     // store TT
-    int flag = (best >= beta) ? TT_LOWER : (alpha > oldAlpha ? TT_EXACT : TT_UPPER);
-    int s = best;
-    if (s > MATE_BOUND) s += ply;
-    else if (s < -MATE_BOUND) s -= ply;
-    if (e.key != pos.key || depth >= e.depth || flag == TT_EXACT) {
-        e.key = pos.key; e.score = (int16_t)s; e.move = bestMove;
-        e.depth = (int8_t)depth; e.flag = (uint8_t)flag;
+    if (!excluded) {
+        int flag = (best >= beta) ? TT_LOWER : (alpha > oldAlpha ? TT_EXACT : TT_UPPER);
+        int s = best;
+        if (s > MATE_BOUND) s += ply;
+        else if (s < -MATE_BOUND) s -= ply;
+        if (e.key != pos.key || depth >= e.depth || flag == TT_EXACT) {
+            e.key = pos.key; e.score = (int16_t)s; e.move = bestMove;
+            e.depth = (int8_t)depth; e.flag = (uint8_t)flag;
+        }
     }
     return best;
 }
