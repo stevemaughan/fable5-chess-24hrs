@@ -48,3 +48,16 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 - Plan: when v4-v2 SPRT ends → SPRT v7 vs v4 (bundle). Then eval batch 8
   (threats, outposts), speed work, PGO final build.
 - Elo estimate: ~2800 (evidence: chained SPRTs from stash-20 anchor).
+
+## Hour 1 — 2026-08-22 15:10
+- SPRT v4 vs v2: **+144 Elo** (69.6%, 250 games, accepted). Deployed v4 to
+  final/, then SPRT v8 vs v4: **+122 Elo** (66.9%, 258 games, accepted).
+  Deployed v8 to final/. final/ is compliance-checked lineage, zero timeouts.
+- Implemented while tests ran: v9 (hidden UCI tuning options), v10 (capture
+  history, passer king proximity eg, score-drop TM extension), v11 (cutnode
+  LMR). All committed, sanity-checked, untested.
+- Calibration match v8 vs stash-25 (~2940 CCRL) RUNNING (120 games).
+- Next hour: calibration result → SPRT v11 vs v8 → deploy if pass; start
+  parameter tuning A/B tests (LMR divisor, time mgmt) using option overrides.
+- Elo estimate: ~2950±100 (chained SPRT sum from stash-20 anchor; calibration
+  match will give a direct reading).
