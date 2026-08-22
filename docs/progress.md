@@ -32,3 +32,19 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 - Next: smoke match vs stash-20 at 10+0.1 to check stability + clock handling,
   then estimate Elo and start strength iterations (SEE, TT in qsearch, better
   pruning, eval terms).
+
+## Elapsed 0:45 — 2026-08-22 14:51
+- Wrote v1 (full engine) in first ~25 min; perft 126/126 at ~14:15; smoke match
+  60% vs stash-20 (~2510 CCRL) → v1 ≈ 2570.
+- SPRT v2 (SEE, qsearch TT, futility, IIR, improving, countermove, hist malus)
+  vs v1: **+256 Elo** (81%, 188 games, H1 accepted). Current ≈ ~2800+.
+- Built and committed further batches while tests run:
+  v4 = eval (passers/mobility/king safety/pawn struct/bishop pair/rook files)
+     + SEE & delta pruning + stability time mgmt (SPRT vs v2 RUNNING)
+  v5 = continuation history (1+2 ply), gravity updates
+  v6 = singular extensions + multicut + TT prefetch
+  v7 = TT eval store/reuse, razoring, adaptive null R, TT aging
+- Eval symmetry test: 0 asymmetries. All builds sanity-checked.
+- Plan: when v4-v2 SPRT ends → SPRT v7 vs v4 (bundle). Then eval batch 8
+  (threats, outposts), speed work, PGO final build.
+- Elo estimate: ~2800 (evidence: chained SPRTs from stash-20 anchor).
