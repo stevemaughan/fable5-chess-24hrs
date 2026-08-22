@@ -709,6 +709,12 @@ static int evaluate(const Position& pos) {
             int relRank = (c == WHITE) ? r : 7 - r;
             if (!(passedMask[c][s] & theirPawns)) {
                 cmg += passedMg[relRank]; ceg += passedEg[relRank];
+                int front = (c == WHITE) ? s + 8 : s - 8;
+                int ff = front & 7, fr = front >> 3;
+                int ourK = pos.kingSq(c);
+                int dOur = max(abs((ourK & 7) - ff), abs((ourK >> 3) - fr));
+                int dTheir = max(abs((theirKing & 7) - ff), abs((theirKing >> 3) - fr));
+                ceg += (dTheir - dOur) * relRank * 2;
             }
             if (!(adjFileMask[f] & ourPawns)) { cmg -= 11; ceg -= 8; }
             if (passedMask[c][s] & fileMask[f] & ourPawns) { cmg -= 8; ceg -= 14; }
@@ -843,6 +849,7 @@ static atomic<bool> searching(false);
 static Move killers[MAX_PLY][2];
 static int historyTab[2][64][64];
 static int16_t contHist[12][64][12][64];   // [prevPiece][prevTo][piece][to]
+static int16_t capHist[12][64][6];         // [attacker][to][victim type]
 static uint8_t pieceStack[MAX_PLY + 2];
 static Move counterMove[2][64][64];
 static inline void gravity(int& h, int bonus) { h += bonus - h * (bonus > 0 ? bonus : -bonus) / 16384; }
@@ -899,9 +906,10 @@ static void scoreMoves(const Position& pos, MoveList& list, Move ttMove, int ply
         int victim = (type == MT_EP) ? PAWN
                    : (pos.board[moveTo(m)] == NO_PIECE ? NO_TYPE : pos.board[moveTo(m)] % 6);
         if (victim != NO_TYPE) {
-            int base = mvvValue[victim] * 100 - pos.board[moveFrom(m)] % 6;
+            int base = mvvValue[victim] * 100 - pos.board[moveFrom(m)] % 6
+                     + capHist[pos.board[moveFrom(m)]][moveTo(m)][victim] / 8;
             if (type == MT_PROMO) base += mvvValue[movePromo(m)];
-            list.m[i].score = (see(pos, m) >= 0 ? 100000000 : -200000) + base;
+            list.m[i].score = (see(pos, m) >= 0 ? 100000000 : -300000) + base;
         } else if (type == MT_PROMO) {
             list.m[i].score = 90000000 + mvvValue[movePromo(m)];
         } else if (m == killers[ply][0]) {
@@ -1124,6 +1132,8 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
     int oldAlpha = alpha;
     Move quietsTried[64];
     int nQuiets = 0;
+    Move capsTried[48];
+    int nCaps = 0;
     int lmpLimit = (3 + depth * depth) / (improving ? 1 : 2);
 
     for (int i = 0; i < list.n; i++) {
@@ -1153,6 +1163,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         moveStack[ply] = m;
         pieceStack[ply] = pos.board[moveTo(m)];
         if (quiet && nQuiets < 64) quietsTried[nQuiets++] = m;
+        else if (isCapture && nCaps < 48) capsTried[nCaps++] = m;
         int ext = (m == ttMove) ? singularExt : 0;
 
         int score;
@@ -1191,6 +1202,19 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
                     pvTable[ply][j] = pvTable[ply + 1][j];
                 pvLen[ply] = pvLen[ply + 1];
                 if (score >= beta) {
+                    {
+                        int bonus = depth * depth < 1200 ? depth * depth + 30 : 1200;
+                        for (int q = 0; q < nCaps; q++) {
+                            Move cm = capsTried[q];
+                            if (cm == m) continue;
+                            int vict = (moveType(cm) == MT_EP) ? PAWN : pos.board[moveTo(cm)] % 6;
+                            gravity16(capHist[pos.board[moveFrom(cm)]][moveTo(cm)][vict], -bonus);
+                        }
+                        if (isCapture) {
+                            int vict = (moveType(m) == MT_EP) ? PAWN : pos.board[moveTo(m)] % 6;
+                            gravity16(capHist[pos.board[moveFrom(m)]][moveTo(m)][vict], bonus);
+                        }
+                    }
                     if (quiet) {
                         if (killers[ply][0] != m) {
                             killers[ply][1] = killers[ply][0];
@@ -1308,6 +1332,7 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
         }
         if (stopFlag && depth > 1) break;
 
+        bool scoreDrop = depth >= 6 && score < lastScore - 25;
         lastScore = score;
 
         long long ms = elapsedMs();
@@ -1330,6 +1355,7 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
         if (si.hardLimitOn && gp.movetime <= 0) {
             static const int stabPct[9] = { 160, 130, 115, 100, 95, 85, 80, 80, 80 };
             long long adjSoft = si.softMs * stabPct[stability] / 100;
+            if (scoreDrop) adjSoft = adjSoft * 150 / 100;
             if (ms > adjSoft) break;
         }
         if (si.hardLimitOn && gp.movetime > 0 && ms >= si.softMs) break;
@@ -1492,6 +1518,8 @@ static void uciLoop() {
             memset(killers, 0, sizeof(killers));
             memset(counterMove, 0, sizeof(counterMove));
             memset(contHist, 0, sizeof(contHist));
+            memset(capHist, 0, sizeof(capHist));
+            memset(capHist, 0, sizeof(capHist));
         } else if (cmd == "setoption") {
             string tok, name, value;
             ss >> tok;   // "name"
@@ -1640,6 +1668,7 @@ int main(int argc, char** argv) {
     reader.detach();
     return 0;
 }
+
 
 
 
