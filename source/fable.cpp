@@ -730,12 +730,14 @@ static int evaluate(const Position& pos) {
             int nt = popcnt(ourPawnAtt & (pos.byColor[c ^ 1] & ~theirPawns));
             cmg += 30 * nt; ceg += 25 * nt;
         }
+        U64 minorAttAll = 0;
         bb = pos.pieces(c, KNIGHT);
         while (bb) {
             int s = poplsb(bb);
             cmg += mgTable[c * 6 + KNIGHT][s]; ceg += egTable[c * 6 + KNIGHT][s];
             phase += 1;
             U64 att = knightAtt[s];
+            minorAttAll |= att;
             int cnt = popcnt(att & mobArea);
             cmg += (cnt - 4) * 4; ceg += (cnt - 4) * 4;
             int relRank = (c == WHITE) ? (s >> 3) : 7 - (s >> 3);
@@ -752,6 +754,7 @@ static int evaluate(const Position& pos) {
             cmg += mgTable[c * 6 + BISHOP][s]; ceg += egTable[c * 6 + BISHOP][s];
             phase += 1;
             U64 att = bishopAtt(s, occ);
+            minorAttAll |= att;
             int cnt = popcnt(att & mobArea);
             cmg += (cnt - 6) * 3; ceg += (cnt - 6) * 3;
             if (att & kingZone) { attackers++; attackWeight += kingAttW[BISHOP]; }
@@ -796,6 +799,14 @@ static int evaluate(const Position& pos) {
                 if (pr == 1) cmg += 8;
                 else if (pr == 2) cmg += 3;
             }
+        }
+        {
+            int nt = popcnt(minorAttAll & (pos.pieces(c ^ 1, ROOK) | pos.pieces(c ^ 1, QUEEN)));
+            cmg += 32 * nt; ceg += 18 * nt;
+        }
+        {
+            int nt = popcnt(minorAttAll & (pos.pieces(c ^ 1, ROOK) | pos.pieces(c ^ 1, QUEEN)));
+            cmg += 32 * nt; ceg += 18 * nt;
         }
         if (!pos.pieces(c, QUEEN)) attackWeight /= 2;
         if (attackers >= 2) {
@@ -1675,6 +1686,7 @@ int main(int argc, char** argv) {
     reader.detach();
     return 0;
 }
+
 
 
 
