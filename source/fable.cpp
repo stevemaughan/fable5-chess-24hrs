@@ -858,10 +858,19 @@ static Move moveStack[MAX_PLY + 2];
 static Move excludedAt[MAX_PLY + 2];
 static Move rootBestMove = 0;
 
+// tunable parameters (adjustable via hidden UCI options for A/B testing)
+static int P_LMRDIV = 225;      // lmr divisor x100
+static int P_RFP = 90;          // reverse futility margin per depth
+static int P_FUTB = 120, P_FUTS = 110;   // futility base/scale
+static int P_ASPD = 25;         // aspiration delta
+static int P_SOFTDIV = 28;      // soft time = t / SOFTDIV + inc * INCPCT/100
+static int P_INCPCT = 75;
+static int P_HARDNUM = 4;       // hard = t / HARDNUM cap
+
 static void initLmr() {
     for (int d = 1; d < 64; d++)
         for (int m = 1; m < 64; m++)
-            lmrTable[d][m] = (int)(0.5 + log((double)d) * log((double)m) / 2.25);
+            lmrTable[d][m] = (int)(0.5 + log((double)d) * log((double)m) * 100.0 / P_LMRDIV);
 }
 
 static long long elapsedMs() {
@@ -1073,7 +1082,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
 
     // reverse futility pruning
     if (!isPV && !inCheck && depth <= 6
-        && refEval - 90 * depth + (improving ? 50 : 0) >= beta
+        && refEval - P_RFP * depth + (improving ? 50 : 0) >= beta
         && abs(beta) < MATE_BOUND)
         return refEval;
 
@@ -1128,7 +1137,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
             // late move pruning
             if (depth <= 4 && legal > lmpLimit) continue;
             // futility pruning
-            if (depth <= 6 && staticEval + 120 + 110 * depth <= alpha) continue;
+            if (depth <= 6 && staticEval + P_FUTB + P_FUTS * depth <= alpha) continue;
         }
         // SEE pruning
         if (legal >= 1 && best > -MATE_BOUND && depth <= 8) {
@@ -1264,10 +1273,10 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
         long long overhead = 25;
         long long t = myTime - overhead;
         if (t < 1) t = 1;
-        int mtg = gp.movestogo > 0 ? gp.movestogo : 28;
-        long long soft = t / mtg + (myInc * 3) / 4;
+        int mtg = gp.movestogo > 0 ? gp.movestogo : P_SOFTDIV;
+        long long soft = t / mtg + myInc * P_INCPCT / 100;
         long long hard = soft * 4;
-        if (hard > t / 4) hard = t / 4;
+        if (hard > t / P_HARDNUM) hard = t / P_HARDNUM;
         if (soft > hard) soft = hard;
         if (hard < 2) hard = 2;
         if (soft < 1) soft = 1;
@@ -1282,7 +1291,7 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
 
     for (int depth = 1; depth <= maxDepth; depth++) {
         int alpha = -MATE, beta = MATE;
-        int delta = 25;
+        int delta = P_ASPD;
         if (depth >= 5) { alpha = lastScore - delta; beta = lastScore + delta; }
         int score;
         while (true) {
@@ -1494,6 +1503,15 @@ static void uciLoop() {
                 if (mb > 4096) mb = 4096;
                 ttResize((size_t)mb);
             }
+            // hidden tuning options
+            else if (name == "LMRdiv") { P_LMRDIV = atoi(value.c_str()); initLmr(); }
+            else if (name == "RFP") P_RFP = atoi(value.c_str());
+            else if (name == "FutB") P_FUTB = atoi(value.c_str());
+            else if (name == "FutS") P_FUTS = atoi(value.c_str());
+            else if (name == "AspD") P_ASPD = atoi(value.c_str());
+            else if (name == "SoftDiv") P_SOFTDIV = atoi(value.c_str());
+            else if (name == "IncPct") P_INCPCT = atoi(value.c_str());
+            else if (name == "HardNum") P_HARDNUM = atoi(value.c_str());
         } else if (cmd == "position") {
             handlePosition(ss);
         } else if (cmd == "go") {
@@ -1622,5 +1640,6 @@ int main(int argc, char** argv) {
     reader.detach();
     return 0;
 }
+
 
 
