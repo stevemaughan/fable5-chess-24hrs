@@ -307,8 +307,9 @@ least depth 5 (depth 6 where it is cheap enough) can be considered correct.
 
   Keep entries short (a few bullets). This log is the only record of your
   process that will be read; it does not affect the score but it must be kept.
-- **Firsts**: record in `docs/progress.md` the time the first full legal
-  chess game was played by the engine.
+- **Firsts**: record in `docs/progress.md` the time the engine first passes
+  the full perft suite (`resources/perft/perft.epd`), and the time the first
+  full legal chess game was played by the engine.
 - **Keep `final/` always deployable.** As soon as you have an engine that
   plays legal chess without crashing under fastchess, put a build of it in
   `final/`. Thereafter, whenever you have a *verified* stronger and stable
