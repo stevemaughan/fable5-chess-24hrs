@@ -61,3 +61,15 @@ Assumptions noted as they arise. All decisions recorded here hourly.
   parameter tuning A/B tests (LMR divisor, time mgmt) using option overrides.
 - Elo estimate: ~2950±100 (chained SPRT sum from stash-20 anchor; calibration
   match will give a direct reading).
+
+## Hour 2 — 2026-08-22 16:12
+- **Calibration: v8 scored 50.8% vs stash-25 → ≈2940 CCRL Blitz.**
+- SPRT v11 vs v8: **+27 Elo** (938 games, accepted). v11 deployed to final/.
+- SPRT v13 (connected pawns, minor-on-major threats) vs v11: RUNNING.
+- Implemented meanwhile: v14 probcut; v15 pawn-structure cache (verified
+  eval-identical via equal bench node count) + history arrays 2048 (safety
+  for very long games); sprt.ps1 now uses draw/resign adjudication to speed
+  tests.
+- Gains per feature are shrinking (normal); tests lengthening (~50 min).
+  Next: v13 result → test (v14+v15) vs winner → tuning A/B via UCI options.
+- Elo estimate: ~2970 (stash-25 anchor + v11 gain).
