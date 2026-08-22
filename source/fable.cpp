@@ -1125,6 +1125,31 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
 
     Move prevMove = ply > 0 ? moveStack[ply - 1] : 0;
 
+    // probcut
+    if (!isPV && !inCheck && !excluded && depth >= 5
+        && beta > -MATE_BOUND && beta < MATE_BOUND) {
+        int pbBeta = beta + 170;
+        if (!(ttHit && e.depth >= depth - 3 && e.score < pbBeta)) {
+            MoveList clist;
+            pos.genMoves(clist, true);
+            scoreMoves(pos, clist, ttMove, ply, prevMove);
+            for (int i = 0; i < clist.n; i++) {
+                Move m = pickMove(clist, i);
+                if (clist.m[i].score < 0) break;   // losing captures
+                pos.makeMove(m);
+                if (pos.lastMoveIllegal()) { pos.unmakeMove(m); continue; }
+                moveStack[ply] = m;
+                pieceStack[ply] = pos.board[moveTo(m)];
+                int v = -qsearch(pos, -pbBeta, -pbBeta + 1, ply + 1);
+                if (v >= pbBeta)
+                    v = -search(pos, depth - 4, ply + 1, -pbBeta, -pbBeta + 1, true, !cutNode);
+                pos.unmakeMove(m);
+                if (stopFlag) return 0;
+                if (v >= pbBeta) return v;
+            }
+        }
+    }
+
     // singular extension / multicut
     int singularExt = 0;
     if (!isRoot && !excluded && depth >= 8 && ttMove && e.key == pos.key
