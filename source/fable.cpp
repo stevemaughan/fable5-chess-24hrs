@@ -692,6 +692,9 @@ static int evaluate(const Position& pos) {
             ? (((theirPawns & ~FILE_A) >> 9) | ((theirPawns & ~FILE_H) >> 7))
             : (((theirPawns & ~FILE_A) << 7) | ((theirPawns & ~FILE_H) << 9));
         U64 mobArea = ~pos.byColor[c] & ~theirPawnAtt;
+        U64 ourPawnAtt = (c == WHITE)
+            ? (((ourPawns & ~FILE_A) << 7) | ((ourPawns & ~FILE_H) << 9))
+            : (((ourPawns & ~FILE_A) >> 9) | ((ourPawns & ~FILE_H) >> 7));
         int theirKing = pos.kingSq(c ^ 1);
         U64 kingZone = kingAtt[theirKing] | (1ULL << theirKing);
         int attackers = 0, attackWeight = 0;
@@ -710,6 +713,11 @@ static int evaluate(const Position& pos) {
             if (!(adjFileMask[f] & ourPawns)) { cmg -= 11; ceg -= 8; }
             if (passedMask[c][s] & fileMask[f] & ourPawns) { cmg -= 8; ceg -= 14; }
         }
+        // pawn threats on their non-pawn pieces
+        {
+            int nt = popcnt(ourPawnAtt & (pos.byColor[c ^ 1] & ~theirPawns));
+            cmg += 30 * nt; ceg += 25 * nt;
+        }
         bb = pos.pieces(c, KNIGHT);
         while (bb) {
             int s = poplsb(bb);
@@ -718,6 +726,11 @@ static int evaluate(const Position& pos) {
             U64 att = knightAtt[s];
             int cnt = popcnt(att & mobArea);
             cmg += (cnt - 4) * 4; ceg += (cnt - 4) * 4;
+            int relRank = (c == WHITE) ? (s >> 3) : 7 - (s >> 3);
+            if (relRank >= 3 && relRank <= 5 && ((1ULL << s) & ourPawnAtt)
+                && !(passedMask[c][s] & adjFileMask[s & 7] & theirPawns)) {
+                cmg += 24; ceg += 12;   // outpost
+            }
             if (att & kingZone) { attackers++; attackWeight += kingAttW[KNIGHT]; }
         }
         bb = pos.pieces(c, BISHOP);
@@ -772,6 +785,7 @@ static int evaluate(const Position& pos) {
                 else if (pr == 2) cmg += 3;
             }
         }
+        if (!pos.pieces(c, QUEEN)) attackWeight /= 2;
         if (attackers >= 2) {
             int danger = attackWeight * attackWeight;
             if (danger > 300) danger = 300;
