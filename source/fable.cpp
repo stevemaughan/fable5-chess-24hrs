@@ -1025,7 +1025,7 @@ static bool isRepetitionOrFifty(const Position& pos) {
     return false;
 }
 
-static int search(Position& pos, int depth, int ply, int alpha, int beta, bool doNull) {
+static int search(Position& pos, int depth, int ply, int alpha, int beta, bool doNull, bool cutNode) {
     bool isPV = (beta - alpha) > 1;
     bool isRoot = (ply == 0);
 
@@ -1100,7 +1100,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         int R = 3 + depth / 5 + ((refEval - beta) > 300 ? 1 : 0);
         moveStack[ply] = 0;
         pos.makeNull();
-        int score = -search(pos, depth - 1 - R, ply + 1, -beta, -beta + 1, false);
+        int score = -search(pos, depth - 1 - R, ply + 1, -beta, -beta + 1, false, !cutNode);
         pos.unmakeNull();
         if (stopFlag) return 0;
         if (score >= beta) return (score > MATE_BOUND) ? beta : score;
@@ -1115,7 +1115,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         && e.score > -MATE_BOUND && e.score < MATE_BOUND) {
         int sBeta = e.score - 2 * depth;
         excludedAt[ply] = ttMove;
-        int sScore = search(pos, (depth - 1) / 2, ply, sBeta - 1, sBeta, false);
+        int sScore = search(pos, (depth - 1) / 2, ply, sBeta - 1, sBeta, false, cutNode);
         excludedAt[ply] = 0;
         if (stopFlag) return 0;
         if (sScore < sBeta) singularExt = 1;
@@ -1168,13 +1168,14 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
 
         int score;
         if (legal == 1) {
-            score = -search(pos, depth - 1 + ext, ply + 1, -beta, -alpha, true);
+            score = -search(pos, depth - 1 + ext, ply + 1, -beta, -alpha, true, false);
         } else {
             int r = 0;
             if (quiet && depth >= 3 && legal > 3) {
                 r = lmrTable[depth < 64 ? depth : 63][legal < 64 ? legal : 63];
                 if (isPV && r > 0) r--;
                 if (!improving) r++;
+                if (cutNode) r++;
                 int hadj = list.m[i].score / 6000;
                 if (hadj > 2) hadj = 2;
                 if (hadj < -2) hadj = -2;
@@ -1182,11 +1183,11 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
                 if (r < 0) r = 0;
                 if (r > depth - 2) r = depth - 2;
             }
-            score = -search(pos, depth - 1 - r, ply + 1, -alpha - 1, -alpha, true);
+            score = -search(pos, depth - 1 - r, ply + 1, -alpha - 1, -alpha, true, isPV ? true : !cutNode);
             if (score > alpha && r > 0)
-                score = -search(pos, depth - 1, ply + 1, -alpha - 1, -alpha, true);
+                score = -search(pos, depth - 1, ply + 1, -alpha - 1, -alpha, true, isPV ? true : !cutNode);
             if (score > alpha && score < beta)
-                score = -search(pos, depth - 1, ply + 1, -beta, -alpha, true);
+                score = -search(pos, depth - 1, ply + 1, -beta, -alpha, true, false);
         }
         pos.unmakeMove(m);
         if (stopFlag) return 0;
@@ -1319,7 +1320,7 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
         if (depth >= 5) { alpha = lastScore - delta; beta = lastScore + delta; }
         int score;
         while (true) {
-            score = search(pos, depth, 0, alpha, beta, true);
+            score = search(pos, depth, 0, alpha, beta, true, false);
             if (stopFlag) break;
             if (score <= alpha) { alpha -= delta; delta *= 3; if (alpha < -MATE) alpha = -MATE; }
             else if (score >= beta) { beta += delta; delta *= 3; if (beta > MATE) beta = MATE; }
@@ -1668,6 +1669,8 @@ int main(int argc, char** argv) {
     reader.detach();
     return 0;
 }
+
+
 
 
 
