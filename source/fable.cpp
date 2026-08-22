@@ -443,7 +443,51 @@ struct Position {
 
     // did the move we just made leave OUR king (previous stm) in check?
     bool lastMoveIllegal() const { return attacked(kingSq(stm ^ 1), stm); }
+
+    U64 attackersTo(int s, U64 o) const {
+        return (pawnAtt[WHITE][s] & pieces(BLACK, PAWN))
+             | (pawnAtt[BLACK][s] & pieces(WHITE, PAWN))
+             | (knightAtt[s] & byType[KNIGHT])
+             | (kingAtt[s] & byType[KING])
+             | (bishopAtt(s, o) & (byType[BISHOP] | byType[QUEEN]))
+             | (rookAtt(s, o) & (byType[ROOK] | byType[QUEEN]));
+    }
 };
+
+// static exchange evaluation (swap algorithm)
+static const int seeVal[7] = { 100, 320, 330, 500, 950, 20000, 0 };
+static int see(const Position& pos, Move m) {
+    int to = moveTo(m), from = moveFrom(m);
+    int gain[32];
+    U64 occ = pos.occ();
+    int captured = (moveType(m) == MT_EP) ? PAWN
+                 : (pos.board[to] == NO_PIECE ? NO_TYPE : pos.board[to] % 6);
+    gain[0] = (captured == NO_TYPE) ? 0 : seeVal[captured];
+    int attacker = pos.board[from] % 6;
+    int stm = pos.stm;
+    int d = 0;
+    occ ^= 1ULL << from;
+    if (moveType(m) == MT_EP) occ ^= 1ULL << (pos.stm == WHITE ? to - 8 : to + 8);
+    while (true) {
+        d++;
+        gain[d] = seeVal[attacker] - gain[d - 1];
+        stm ^= 1;
+        U64 att = pos.attackersTo(to, occ) & occ & pos.byColor[stm];
+        if (!att) break;
+        // pick least valuable attacker
+        int t;
+        for (t = PAWN; t <= KING; t++)
+            if (att & pos.byType[t]) break;
+        attacker = t;
+        occ ^= att & pos.byType[t] & -(att & pos.byType[t]);   // clear one bit
+        if (d >= 30) break;
+    }
+    while (--d) {
+        int v = -gain[d - 1] > gain[d] ? -gain[d - 1] : gain[d];
+        gain[d - 1] = -v;
+    }
+    return gain[0];
+}
 
 // ------------------------------- perft --------------------------------------
 static U64 perft(Position& pos, int depth) {
@@ -674,9 +718,13 @@ static atomic<bool> searching(false);
 
 static Move killers[MAX_PLY][2];
 static int historyTab[2][64][64];
+static Move counterMove[2][64][64];
 static Move pvTable[MAX_PLY][MAX_PLY];
 static int pvLen[MAX_PLY];
 static int lmrTable[64][64];
+static int evalStack[MAX_PLY];
+static Move moveStack[MAX_PLY + 2];
+static Move rootBestMove = 0;
 
 static void initLmr() {
     for (int d = 1; d < 64; d++)
@@ -697,7 +745,8 @@ static inline void checkTime() {
 
 static const int mvvValue[7] = { 100, 320, 330, 500, 900, 10000, 0 };
 
-static void scoreMoves(const Position& pos, MoveList& list, Move ttMove, int ply) {
+static void scoreMoves(const Position& pos, MoveList& list, Move ttMove, int ply, Move prev) {
+    Move counter = prev ? counterMove[pos.stm][moveFrom(prev)][moveTo(prev)] : 0;
     for (int i = 0; i < list.n; i++) {
         Move m = list.m[i].move;
         if (m == ttMove) { list.m[i].score = 1 << 30; continue; }
@@ -705,14 +754,17 @@ static void scoreMoves(const Position& pos, MoveList& list, Move ttMove, int ply
         int victim = (type == MT_EP) ? PAWN
                    : (pos.board[moveTo(m)] == NO_PIECE ? NO_TYPE : pos.board[moveTo(m)] % 6);
         if (victim != NO_TYPE) {
-            list.m[i].score = 100000000 + mvvValue[victim] * 100 - pos.board[moveFrom(m)] % 6;
-            if (type == MT_PROMO) list.m[i].score += mvvValue[movePromo(m)];
+            int base = mvvValue[victim] * 100 - pos.board[moveFrom(m)] % 6;
+            if (type == MT_PROMO) base += mvvValue[movePromo(m)];
+            list.m[i].score = (see(pos, m) >= 0 ? 100000000 : -200000) + base;
         } else if (type == MT_PROMO) {
             list.m[i].score = 90000000 + mvvValue[movePromo(m)];
         } else if (m == killers[ply][0]) {
             list.m[i].score = 80000000;
         } else if (m == killers[ply][1]) {
             list.m[i].score = 79000000;
+        } else if (m == counter) {
+            list.m[i].score = 78000000;
         } else {
             list.m[i].score = historyTab[pos.stm][moveFrom(m)][moveTo(m)];
         }
@@ -734,6 +786,22 @@ static int qsearch(Position& pos, int alpha, int beta, int ply) {
     if (ply > si.seldepth) si.seldepth = ply;
     if (ply >= MAX_PLY - 1) return evaluate(pos);
 
+    // TT probe (depth 0)
+    TTEntry& e = tt[pos.key & ttMask];
+    Move ttMove = 0;
+    if (e.key == pos.key) {
+        ttMove = e.move;
+        if (beta - alpha == 1) {
+            int s = e.score;
+            if (s > MATE_BOUND) s -= ply;
+            else if (s < -MATE_BOUND) s += ply;
+            if (e.flag == TT_EXACT ||
+                (e.flag == TT_LOWER && s >= beta) ||
+                (e.flag == TT_UPPER && s <= alpha))
+                return s;
+        }
+    }
+
     bool inCheck = pos.inCheck();
     int best;
     if (inCheck) {
@@ -746,10 +814,14 @@ static int qsearch(Position& pos, int alpha, int beta, int ply) {
 
     MoveList list;
     pos.genMoves(list, !inCheck);   // evasions: all moves; else captures only
-    scoreMoves(pos, list, 0, ply >= MAX_PLY ? 0 : ply);
+    scoreMoves(pos, list, ttMove, ply, 0);
 
+    int oldAlpha = alpha;
+    Move bestMove = 0;
     for (int i = 0; i < list.n; i++) {
         Move m = pickMove(list, i);
+        if (!inCheck && list.m[i].score < 0 && best > -MATE_BOUND)
+            break;   // losing captures: prune
         pos.makeMove(m);
         if (pos.lastMoveIllegal()) { pos.unmakeMove(m); continue; }
         int score = -qsearch(pos, -beta, -alpha, ply + 1);
@@ -757,11 +829,20 @@ static int qsearch(Position& pos, int alpha, int beta, int ply) {
         if (stopFlag) return 0;
         if (score > best) {
             best = score;
+            bestMove = m;
             if (score > alpha) {
                 alpha = score;
                 if (score >= beta) break;
             }
         }
+    }
+    int flag = (best >= beta) ? TT_LOWER : (alpha > oldAlpha ? TT_EXACT : TT_UPPER);
+    int s2 = best;
+    if (s2 > MATE_BOUND) s2 += ply;
+    else if (s2 < -MATE_BOUND) s2 -= ply;
+    if (e.key != pos.key || e.depth <= 0) {
+        e.key = pos.key; e.score = (int16_t)s2; e.move = bestMove;
+        e.depth = 0; e.flag = (uint8_t)flag;
     }
     return best;
 }
@@ -816,10 +897,16 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         }
     }
 
+    // internal iterative reduction
+    if (depth >= 4 && !ttMove) depth--;
+
     int staticEval = evaluate(pos);
+    evalStack[ply] = staticEval;
+    bool improving = !inCheck && ply >= 2 && staticEval > evalStack[ply - 2];
 
     // reverse futility pruning
-    if (!isPV && !inCheck && depth <= 6 && staticEval - 90 * depth >= beta
+    if (!isPV && !inCheck && depth <= 6
+        && staticEval - 90 * depth + (improving ? 50 : 0) >= beta
         && abs(beta) < MATE_BOUND)
         return staticEval;
 
@@ -827,6 +914,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
     if (!isPV && !inCheck && doNull && depth >= 3 && staticEval >= beta
         && (pos.byColor[pos.stm] & ~(pos.byType[PAWN] | pos.byType[KING]))) {
         int R = 3 + depth / 5;
+        moveStack[ply] = 0;
         pos.makeNull();
         int score = -search(pos, depth - 1 - R, ply + 1, -beta, -beta + 1, false);
         pos.unmakeNull();
@@ -834,14 +922,19 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         if (score >= beta) return (score > MATE_BOUND) ? beta : score;
     }
 
+    Move prevMove = ply > 0 ? moveStack[ply - 1] : 0;
+
     MoveList list;
     pos.genMoves(list, false);
-    scoreMoves(pos, list, ttMove, ply);
+    scoreMoves(pos, list, ttMove, ply, prevMove);
 
     int best = -MATE;
     Move bestMove = 0;
     int legal = 0;
     int oldAlpha = alpha;
+    Move quietsTried[64];
+    int nQuiets = 0;
+    int lmpLimit = (3 + depth * depth) / (improving ? 1 : 2);
 
     for (int i = 0; i < list.n; i++) {
         Move m = pickMove(list, i);
@@ -849,23 +942,29 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         bool isPromo = moveType(m) == MT_PROMO;
         bool quiet = !isCapture && !isPromo;
 
-        // late move pruning at shallow depth
-        if (!isPV && !inCheck && quiet && depth <= 3 && legal > 3 + depth * depth
-            && best > -MATE_BOUND)
-            continue;
+        if (!isPV && !inCheck && quiet && legal >= 1 && best > -MATE_BOUND) {
+            // late move pruning
+            if (depth <= 4 && legal > lmpLimit) continue;
+            // futility pruning
+            if (depth <= 6 && staticEval + 120 + 110 * depth <= alpha) continue;
+        }
 
         pos.makeMove(m);
         if (pos.lastMoveIllegal()) { pos.unmakeMove(m); continue; }
         legal++;
+        moveStack[ply] = m;
+        if (quiet && nQuiets < 64) quietsTried[nQuiets++] = m;
 
         int score;
         if (legal == 1) {
             score = -search(pos, depth - 1, ply + 1, -beta, -alpha, true);
         } else {
             int r = 0;
-            if (quiet && depth >= 3 && legal > 3 && !inCheck) {
+            if (quiet && depth >= 3 && legal > 3) {
                 r = lmrTable[depth < 64 ? depth : 63][legal < 64 ? legal : 63];
                 if (isPV && r > 0) r--;
+                if (!improving) r++;
+                r -= historyTab[pos.stm ^ 1][moveFrom(m)][moveTo(m)] / 6000;
                 if (r < 0) r = 0;
                 if (r > depth - 2) r = depth - 2;
             }
@@ -883,6 +982,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
             bestMove = m;
             if (score > alpha) {
                 alpha = score;
+                if (isRoot) rootBestMove = m;
                 pvTable[ply][ply] = m;
                 for (int j = ply + 1; j < pvLen[ply + 1]; j++)
                     pvTable[ply][j] = pvTable[ply + 1][j];
@@ -893,9 +993,17 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
                             killers[ply][1] = killers[ply][0];
                             killers[ply][0] = m;
                         }
+                        if (prevMove)
+                            counterMove[pos.stm][moveFrom(prevMove)][moveTo(prevMove)] = m;
+                        int bonus = depth * depth < 400 ? depth * depth : 400;
                         int& h = historyTab[pos.stm][moveFrom(m)][moveTo(m)];
-                        h += depth * depth;
-                        if (h > 40000000) h /= 2;
+                        h += bonus;
+                        if (h > 16384) h = 16384;
+                        for (int q = 0; q < nQuiets - 1; q++) {
+                            int& hq = historyTab[pos.stm][moveFrom(quietsTried[q])][moveTo(quietsTried[q])];
+                            hq -= bonus;
+                            if (hq < 0) hq = 0;
+                        }
                     }
                     break;
                 }
@@ -966,6 +1074,7 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
 
     Move bestMove = 0;
     int lastScore = 0;
+    rootBestMove = 0;
 
     for (int depth = 1; depth <= maxDepth; depth++) {
         int alpha = -MATE, beta = MATE;
@@ -979,10 +1088,10 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
             else if (score >= beta) { beta += delta; delta *= 3; if (beta > MATE) beta = MATE; }
             else break;
         }
+        if (rootBestMove) bestMove = rootBestMove;
         if (stopFlag && depth > 1) break;
 
         lastScore = score;
-        if (pvLen[0] > 0) bestMove = pvTable[0][0];
 
         long long ms = elapsedMs();
         {
@@ -1160,6 +1269,7 @@ static void uciLoop() {
             ttClear();
             memset(historyTab, 0, sizeof(historyTab));
             memset(killers, 0, sizeof(killers));
+            memset(counterMove, 0, sizeof(counterMove));
         } else if (cmd == "setoption") {
             string tok, name, value;
             ss >> tok;   // "name"
