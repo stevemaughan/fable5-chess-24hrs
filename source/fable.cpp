@@ -718,6 +718,12 @@ static int evaluate(const Position& pos) {
             }
             if (!(adjFileMask[f] & ourPawns)) { cmg -= 11; ceg -= 8; }
             if (passedMask[c][s] & fileMask[f] & ourPawns) { cmg -= 8; ceg -= 14; }
+            U64 b1 = 1ULL << s;
+            U64 adjSameRank = ((b1 & ~FILE_H) << 1) | ((b1 & ~FILE_A) >> 1);
+            if ((ourPawnAtt & b1) || (ourPawns & adjSameRank)) {
+                static const int conn[8] = { 0, 3, 5, 8, 16, 30, 60, 0 };
+                cmg += conn[relRank]; ceg += conn[relRank] * 2 / 3;
+            }
         }
         // pawn threats on their non-pawn pieces
         {

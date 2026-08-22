@@ -141,15 +141,15 @@
     ],
     "stats": {
         "fable vs stash25": {
-            "wins": 22,
-            "losses": 27,
-            "draws": 9,
-            "penta_WW": 3,
-            "penta_WD": 4,
-            "penta_WL": 12,
-            "penta_DD": 2,
-            "penta_LD": 1,
-            "penta_LL": 7
+            "wins": 47,
+            "losses": 45,
+            "draws": 28,
+            "penta_WW": 7,
+            "penta_WD": 12,
+            "penta_WL": 21,
+            "penta_DD": 4,
+            "penta_LD": 8,
+            "penta_LL": 8
         }
     }
 }
