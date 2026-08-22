@@ -178,8 +178,8 @@ struct Position {
     int fifty = 0;
     U64 key = 0;
     int histPly = 0;               // index into stack/keyHist
-    StateInfo stack[1024];
-    U64 keyHist[1024];
+    StateInfo stack[2048];
+    U64 keyHist[2048];
 
     U64 occ() const { return byColor[0] | byColor[1]; }
     U64 pieces(int c, int t) const { return byColor[c] & byType[t]; }
@@ -1748,6 +1748,7 @@ int main(int argc, char** argv) {
     reader.detach();
     return 0;
 }
+
 
 
 
