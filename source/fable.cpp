@@ -798,6 +798,7 @@ struct TTEntry {
     int16_t eval;
 };
 static TTEntry* tt = nullptr;
+static uint8_t ttAge = 0;
 static size_t ttMask = 0;
 static void ttResize(size_t mb) {
     if (tt) free(tt);
@@ -920,9 +921,9 @@ static int qsearch(Position& pos, int alpha, int beta, int ply) {
             int s = e.score;
             if (s > MATE_BOUND) s -= ply;
             else if (s < -MATE_BOUND) s += ply;
-            if (e.flag == TT_EXACT ||
-                (e.flag == TT_LOWER && s >= beta) ||
-                (e.flag == TT_UPPER && s <= alpha))
+            if ((e.flag & 3) == TT_EXACT ||
+                ((e.flag & 3) == TT_LOWER && s >= beta) ||
+                ((e.flag & 3) == TT_UPPER && s <= alpha))
                 return s;
         }
     }
@@ -974,9 +975,9 @@ static int qsearch(Position& pos, int alpha, int beta, int ply) {
     int s2 = best;
     if (s2 > MATE_BOUND) s2 += ply;
     else if (s2 < -MATE_BOUND) s2 -= ply;
-    if (e.key != pos.key || e.depth <= 0) {
+    if (e.key != pos.key || e.depth <= 0 || (e.flag >> 2) != (ttAge & 63)) {
         e.key = pos.key; e.score = (int16_t)s2; e.move = bestMove;
-        e.depth = 0; e.flag = (uint8_t)flag;
+        e.depth = 0; e.flag = (uint8_t)(flag | ((ttAge & 63) << 2));
         e.eval = (int16_t)standPat;
     }
     return best;
@@ -1027,9 +1028,9 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
             int s = e.score;
             if (s > MATE_BOUND) s -= ply;
             else if (s < -MATE_BOUND) s += ply;
-            if (e.flag == TT_EXACT ||
-                (e.flag == TT_LOWER && s >= beta) ||
-                (e.flag == TT_UPPER && s <= alpha))
+            if ((e.flag & 3) == TT_EXACT ||
+                ((e.flag & 3) == TT_LOWER && s >= beta) ||
+                ((e.flag & 3) == TT_UPPER && s <= alpha))
                 return s;
         }
     }
@@ -1043,9 +1044,9 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
     // refine eval with TT score when its bound applies
     int refEval = staticEval;
     if (ttHit && !excluded && e.score > -MATE_BOUND && e.score < MATE_BOUND) {
-        if ((e.flag == TT_LOWER && e.score > refEval) ||
-            (e.flag == TT_UPPER && e.score < refEval) ||
-            e.flag == TT_EXACT)
+        if (((e.flag & 3) == TT_LOWER && e.score > refEval) ||
+            ((e.flag & 3) == TT_UPPER && e.score < refEval) ||
+            (e.flag & 3) == TT_EXACT)
             refEval = e.score;
     }
     bool improving = !inCheck && ply >= 2 && staticEval > evalStack[ply - 2];
@@ -1079,7 +1080,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
     // singular extension / multicut
     int singularExt = 0;
     if (!isRoot && !excluded && depth >= 8 && ttMove && e.key == pos.key
-        && e.depth >= depth - 3 && e.flag != TT_UPPER
+        && e.depth >= depth - 3 && (e.flag & 3) != TT_UPPER
         && e.score > -MATE_BOUND && e.score < MATE_BOUND) {
         int sBeta = e.score - 2 * depth;
         excludedAt[ply] = ttMove;
@@ -1202,9 +1203,10 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         int s = best;
         if (s > MATE_BOUND) s += ply;
         else if (s < -MATE_BOUND) s -= ply;
-        if (e.key != pos.key || depth >= e.depth || flag == TT_EXACT) {
+        if (e.key != pos.key || depth >= e.depth || flag == TT_EXACT
+            || (e.flag >> 2) != (ttAge & 63)) {
             e.key = pos.key; e.score = (int16_t)s; e.move = bestMove;
-            e.depth = (int8_t)depth; e.flag = (uint8_t)flag;
+            e.depth = (int8_t)depth; e.flag = (uint8_t)(flag | ((ttAge & 63) << 2));
             e.eval = (int16_t)(inCheck ? -32001 : staticEval);
         }
     }
@@ -1232,6 +1234,7 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
     si.seldepth = 0;
     si.start = chrono::steady_clock::now();
     si.hardLimitOn = false;
+    ttAge++;
     memset(killers, 0, sizeof(killers));
 
     long long myTime = pos.stm == WHITE ? gp.wtime : gp.btime;
@@ -1605,4 +1608,5 @@ int main(int argc, char** argv) {
     reader.detach();
     return 0;
 }
+
 
