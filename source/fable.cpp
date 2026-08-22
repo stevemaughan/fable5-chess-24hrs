@@ -1597,7 +1597,7 @@ static void uciLoop() {
                 si.start = chrono::steady_clock::now();
                 si.hardLimitOn = false;
                 rootBestMove = 0;
-                for (int d = 1; d <= 12; d++) search(p, d, 0, -MATE, MATE, true);
+                for (int d = 1; d <= 12; d++) search(p, d, 0, -MATE, MATE, true, false);
                 total += si.nodes;
             }
             auto ms = chrono::duration_cast<chrono::milliseconds>(
