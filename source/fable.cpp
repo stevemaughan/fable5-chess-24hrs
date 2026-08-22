@@ -781,7 +781,7 @@ static int evaluate(const Position& pos) {
                 && !(passedMask[c][s] & adjFileMask[s & 7] & theirPawns)) {
                 cmg += 24; ceg += 12;   // outpost
             }
-            if (att & kingZone) { attackers++; attackWeight += kingAttW[KNIGHT]; }
+            if (att & kingZone) { attackers++; attackWeight += kingAttW[KNIGHT] * popcnt(att & kingZone); }
         }
         bb = pos.pieces(c, BISHOP);
         if (popcnt(bb) >= 2) { cmg += 28; ceg += 45; }
@@ -793,7 +793,7 @@ static int evaluate(const Position& pos) {
             minorAttAll |= att;
             int cnt = popcnt(att & mobArea);
             cmg += (cnt - 6) * 3; ceg += (cnt - 6) * 3;
-            if (att & kingZone) { attackers++; attackWeight += kingAttW[BISHOP]; }
+            if (att & kingZone) { attackers++; attackWeight += kingAttW[BISHOP] * popcnt(att & kingZone); }
         }
         bb = pos.pieces(c, ROOK);
         while (bb) {
@@ -806,7 +806,7 @@ static int evaluate(const Position& pos) {
             int f = s & 7;
             if (!(fileMask[f] & allPawns)) { cmg += 25; ceg += 10; }
             else if (!(fileMask[f] & ourPawns)) { cmg += 12; ceg += 5; }
-            if (att & kingZone) { attackers++; attackWeight += kingAttW[ROOK]; }
+            if (att & kingZone) { attackers++; attackWeight += kingAttW[ROOK] * popcnt(att & kingZone); }
         }
         bb = pos.pieces(c, QUEEN);
         while (bb) {
@@ -816,7 +816,7 @@ static int evaluate(const Position& pos) {
             U64 att = queenAtt(s, occ);
             int cnt = popcnt(att & mobArea);
             cmg += (cnt - 13); ceg += (cnt - 13) * 2;
-            if (att & kingZone) { attackers++; attackWeight += kingAttW[QUEEN]; }
+            if (att & kingZone) { attackers++; attackWeight += kingAttW[QUEEN] * popcnt(att & kingZone); }
         }
         {
             int s = pos.kingSq(c);
@@ -846,8 +846,8 @@ static int evaluate(const Position& pos) {
         }
         if (!pos.pieces(c, QUEEN)) attackWeight /= 2;
         if (attackers >= 2) {
-            int danger = attackWeight * attackWeight;
-            if (danger > 300) danger = 300;
+            int danger = attackWeight * attackWeight / 4;
+            if (danger > 500) danger = 500;
             cmg += danger;   // we are ATTACKING their king: bonus for us
         }
         mg += sign * cmg;
@@ -1766,6 +1766,7 @@ int main(int argc, char** argv) {
     reader.detach();
     return 0;
 }
+
 
 
 
