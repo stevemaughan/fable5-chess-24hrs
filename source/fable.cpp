@@ -190,15 +190,18 @@ struct Position {
         return lsb(pieces(c, KING));
     }
 
+    U64 pawnKey = 0;
     void put(int pc, int s) {
         board[s] = (uint8_t)pc;
         byColor[pc / 6] |= 1ULL << s;
         byType[pc % 6] |= 1ULL << s;
+        if (pc % 6 == PAWN) pawnKey ^= zPiece[pc][s];
     }
     void remove(int pc, int s) {
         board[s] = NO_PIECE;
         byColor[pc / 6] &= ~(1ULL << s);
         byType[pc % 6] &= ~(1ULL << s);
+        if (pc % 6 == PAWN) pawnKey ^= zPiece[pc][s];
     }
 
     bool attacked(int s, int by) const {
@@ -216,7 +219,7 @@ struct Position {
         memset(byType, 0, sizeof(byType));
         memset(byColor, 0, sizeof(byColor));
         for (int i = 0; i < 64; i++) board[i] = NO_PIECE;
-        castling = 0; ep = -1; fifty = 0; histPly = 0;
+        castling = 0; ep = -1; fifty = 0; histPly = 0; pawnKey = 0;
         istringstream ss(fen);
         string b, side, cast, eps; int half = 0, full = 1;
         ss >> b >> side >> cast >> eps >> half >> full;
@@ -669,6 +672,50 @@ static void initEval() {
     }
 }
 
+struct PawnEntry {
+    U64 key;
+    U64 passed;
+    int16_t mg[2], eg[2];
+};
+static PawnEntry pawnCache[1 << 15];
+
+static void fillPawnEntry(const Position& pos, PawnEntry& pe) {
+    static const int passedMg[8] = { 0, 2, 6, 12, 25, 50, 90, 0 };
+    static const int passedEg[8] = { 0, 8, 15, 30, 55, 100, 160, 0 };
+    pe.key = pos.pawnKey;
+    pe.passed = 0;
+    for (int c = 0; c < 2; c++) {
+        int mg = 0, eg = 0;
+        U64 ourPawns = pos.pieces(c, PAWN);
+        U64 theirPawns = pos.pieces(c ^ 1, PAWN);
+        U64 ourPawnAtt = (c == WHITE)
+            ? (((ourPawns & ~FILE_A) << 7) | ((ourPawns & ~FILE_H) << 9))
+            : (((ourPawns & ~FILE_A) >> 9) | ((ourPawns & ~FILE_H) >> 7));
+        U64 bb = ourPawns;
+        while (bb) {
+            int s = poplsb(bb);
+            int p = c * 6 + PAWN;
+            mg += mgTable[p][s]; eg += egTable[p][s];
+            int f = s & 7, r = s >> 3;
+            int relRank = (c == WHITE) ? r : 7 - r;
+            if (!(passedMask[c][s] & theirPawns)) {
+                mg += passedMg[relRank]; eg += passedEg[relRank];
+                pe.passed |= 1ULL << s;
+            }
+            if (!(adjFileMask[f] & ourPawns)) { mg -= 11; eg -= 8; }
+            if (passedMask[c][s] & fileMask[f] & ourPawns) { mg -= 8; eg -= 14; }
+            U64 b1 = 1ULL << s;
+            U64 adjSameRank = ((b1 & ~FILE_H) << 1) | ((b1 & ~FILE_A) >> 1);
+            if ((ourPawnAtt & b1) || (ourPawns & adjSameRank)) {
+                static const int conn[8] = { 0, 3, 5, 8, 16, 30, 60, 0 };
+                mg += conn[relRank]; eg += conn[relRank] * 2 / 3;
+            }
+        }
+        pe.mg[c] = (int16_t)mg;
+        pe.eg[c] = (int16_t)eg;
+    }
+}
+
 static int evaluate(const Position& pos) {
     // insufficient material: bare kings, or a single minor each at most
     U64 majors = pos.byType[QUEEN] | pos.byType[ROOK] | pos.byType[PAWN];
@@ -679,9 +726,9 @@ static int evaluate(const Position& pos) {
     }
     int mg = 0, eg = 0, phase = 0;
     U64 occ = pos.occ();
-    static const int passedMg[8] = { 0, 2, 6, 12, 25, 50, 90, 0 };
-    static const int passedEg[8] = { 0, 8, 15, 30, 55, 100, 160, 0 };
     static const int kingAttW[6] = { 0, 2, 2, 3, 5, 0 };
+    PawnEntry& pe = pawnCache[pos.pawnKey & ((1 << 15) - 1)];
+    if (pe.key != pos.pawnKey) fillPawnEntry(pos, pe);
 
     for (int c = 0; c < 2; c++) {
         int sign = (c == WHITE) ? 1 : -1;
@@ -700,29 +747,18 @@ static int evaluate(const Position& pos) {
         int attackers = 0, attackWeight = 0;
         int cmg = 0, ceg = 0;
 
-        U64 bb = ourPawns;
-        while (bb) {
-            int s = poplsb(bb);
-            int p = pos.board[s];
-            cmg += mgTable[p][s]; ceg += egTable[p][s];
-            int f = s & 7, r = s >> 3;
-            int relRank = (c == WHITE) ? r : 7 - r;
-            if (!(passedMask[c][s] & theirPawns)) {
-                cmg += passedMg[relRank]; ceg += passedEg[relRank];
+        cmg += pe.mg[c]; ceg += pe.eg[c];
+        {
+            U64 pass = pe.passed & ourPawns;
+            int ourK = pos.kingSq(c);
+            while (pass) {
+                int s = poplsb(pass);
+                int relRank = (c == WHITE) ? (s >> 3) : 7 - (s >> 3);
                 int front = (c == WHITE) ? s + 8 : s - 8;
                 int ff = front & 7, fr = front >> 3;
-                int ourK = pos.kingSq(c);
                 int dOur = max(abs((ourK & 7) - ff), abs((ourK >> 3) - fr));
                 int dTheir = max(abs((theirKing & 7) - ff), abs((theirKing >> 3) - fr));
                 ceg += (dTheir - dOur) * relRank * 2;
-            }
-            if (!(adjFileMask[f] & ourPawns)) { cmg -= 11; ceg -= 8; }
-            if (passedMask[c][s] & fileMask[f] & ourPawns) { cmg -= 8; ceg -= 14; }
-            U64 b1 = 1ULL << s;
-            U64 adjSameRank = ((b1 & ~FILE_H) << 1) | ((b1 & ~FILE_A) >> 1);
-            if ((ourPawnAtt & b1) || (ourPawns & adjSameRank)) {
-                static const int conn[8] = { 0, 3, 5, 8, 16, 30, 60, 0 };
-                cmg += conn[relRank]; ceg += conn[relRank] * 2 / 3;
             }
         }
         // pawn threats on their non-pawn pieces
@@ -731,7 +767,7 @@ static int evaluate(const Position& pos) {
             cmg += 30 * nt; ceg += 25 * nt;
         }
         U64 minorAttAll = 0;
-        bb = pos.pieces(c, KNIGHT);
+        U64 bb = pos.pieces(c, KNIGHT);
         while (bb) {
             int s = poplsb(bb);
             cmg += mgTable[c * 6 + KNIGHT][s]; ceg += egTable[c * 6 + KNIGHT][s];
@@ -1670,6 +1706,7 @@ static void uciLoop() {
                 memset(b.byType, 0, sizeof(b.byType));
                 memset(b.byColor, 0, sizeof(b.byColor));
                 for (int i = 0; i < 64; i++) b.board[i] = NO_PIECE;
+                b.pawnKey = 0;
                 for (int s = 0; s < 64; s++)
                     if (a.board[s] != NO_PIECE)
                         b.put((a.board[s] + 6) % 12, s ^ 56);
