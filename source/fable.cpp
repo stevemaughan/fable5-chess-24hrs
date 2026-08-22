@@ -917,6 +917,7 @@ static int evalStack[MAX_PLY];
 static Move moveStack[MAX_PLY + 2];
 static Move excludedAt[MAX_PLY + 2];
 static Move rootBestMove = 0;
+static U64 rootMoveNodes[1 << 16];
 
 // tunable parameters (adjustable via hidden UCI options for A/B testing)
 static int P_LMRDIV = 225;      // lmr divisor x100
@@ -1226,6 +1227,8 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
             if (depth <= 4 && legal > lmpLimit) continue;
             // futility pruning
             if (depth <= 6 && staticEval + P_FUTB + P_FUTS * depth <= alpha) continue;
+            // history pruning
+            if (depth <= 4 && list.m[i].score < -2500 * depth) continue;
         }
         // SEE pruning
         if (legal >= 1 && best > -MATE_BOUND && depth <= 8) {
@@ -1243,12 +1246,17 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         if (quiet && nQuiets < 64) quietsTried[nQuiets++] = m;
         else if (isCapture && nCaps < 48) capsTried[nCaps++] = m;
         int ext = (m == ttMove) ? singularExt : 0;
+        U64 nodesBefore = si.nodes;
 
         int score;
         if (legal == 1) {
             score = -search(pos, depth - 1 + ext, ply + 1, -beta, -alpha, true, false);
         } else {
             int r = 0;
+            if (isCapture && depth >= 3 && legal > 3 && list.m[i].score < 0) {
+                r = 1 + (depth > 8);   // reduce losing captures
+                if (r > depth - 2) r = depth - 2;
+            }
             if (quiet && depth >= 3 && legal > 3) {
                 r = lmrTable[depth < 64 ? depth : 63][legal < 64 ? legal : 63];
                 if (isPV && r > 0) r--;
@@ -1268,6 +1276,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
                 score = -search(pos, depth - 1, ply + 1, -beta, -alpha, true, false);
         }
         pos.unmakeMove(m);
+        if (isRoot) rootMoveNodes[m] += si.nodes - nodesBefore;
         if (stopFlag) return 0;
 
         if (score > best) {
@@ -1391,6 +1400,7 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
     int lastScore = 0;
     int stability = 0;
     rootBestMove = 0;
+    memset(rootMoveNodes, 0, sizeof(rootMoveNodes));
 
     for (int depth = 1; depth <= maxDepth; depth++) {
         int alpha = -MATE, beta = MATE;
@@ -1435,6 +1445,14 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
             static const int stabPct[9] = { 160, 130, 115, 100, 95, 85, 80, 80, 80 };
             long long adjSoft = si.softMs * stabPct[stability] / 100;
             if (scoreDrop) adjSoft = adjSoft * 150 / 100;
+            if (bestMove && si.nodes > 4096) {
+                // spend less when best move dominates the tree
+                int fPct = (int)(rootMoveNodes[bestMove] * 100 / si.nodes);
+                int nodePct = 165 - fPct;               // f=90% -> 75%, f=40% -> 125%
+                if (nodePct < 70) nodePct = 70;
+                if (nodePct > 140) nodePct = 140;
+                adjSoft = adjSoft * nodePct / 100;
+            }
             if (ms > adjSoft) break;
         }
         if (si.hardLimitOn && gp.movetime > 0 && ms >= si.softMs) break;
