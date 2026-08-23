@@ -94,3 +94,7 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 - SPRT v17 (capture LMR, history pruning, node-fraction TM, attack-unit king safety) vs v15 still running (~1h).
 - v18 (correction history) built, queued next. No other changes; keeping lineage stable while tests decide.
 - Elo estimate: ~2995 (unchanged; awaiting v17 result).
+
+## Hour 8 - 2026-08-22 21:59
+- SPRT v17 vs v15 still running (1h52m). Waiting; v18 queued.
+- Elo estimate: ~2995 (awaiting v17 result).
