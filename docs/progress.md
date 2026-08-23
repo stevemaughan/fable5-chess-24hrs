@@ -171,3 +171,12 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 ## Hour 21.2 - 2026-08-23 09:25
 - LMRdiv 200 A/B: neutral (-1.9 +/-9.5, 2000 games). Default 225 kept. Tuning phase closed.
 - FINALIZATION: stash-30 calibration running; then PGO build + bench compare, compliance, standalone check, 60-game sanity.
+
+## Hour 22 - 2026-08-23 09:38
+- FINAL VERIFICATION COMPLETE on final/Fable5chess24hrs.exe (v21, plain -O3/LTO/static):
+  compliance 40/40; perft startpos d5 + kiwipete d4 exact; runs with System32-only PATH;
+  sanity 80 games vs stash-25: 66.9%, 0 timeouts/crashes/illegal.
+- PGO build measured SLOWER (2.23 vs 2.49 Mnps, identical nodes) - rejected.
+- Calibrations: 50.8% vs stash-25 at v8; 30.4% vs stash-30 at v21 -> ~3026.
+- Last bounded experiment: TM SoftDiv 34/IncPct 70 A/B (kill by 12:15 if undecided).
+- Elo estimate: **~3030 CCRL Blitz** (two-anchor consistency).
