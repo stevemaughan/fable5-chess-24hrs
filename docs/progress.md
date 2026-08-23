@@ -158,3 +158,8 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 ## Hour 20 - 2026-08-23 08:04
 - LMRdiv 200 A/B running (~40min).
 - Elo estimate: ~3045.
+
+## Hour 21 - 2026-08-23 08:59
+- LMRdiv A/B still running (~1h35m); will cap ~2000 games. Whatever the outcome, defaults kept on inconclusive.
+- 5h07m remain. Finalization begins no later than 10:30 regardless of test state.
+- Elo estimate: ~3045.
