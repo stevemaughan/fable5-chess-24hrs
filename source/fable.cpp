@@ -903,6 +903,7 @@ static Move killers[MAX_PLY][2];
 static int historyTab[2][64][64];
 static int16_t contHist[12][64][12][64];   // [prevPiece][prevTo][piece][to]
 static int16_t capHist[12][64][6];         // [attacker][to][victim type]
+static int16_t corrHist[2][16384];         // [stm][pawnKey] eval correction (x16)
 static uint8_t pieceStack[MAX_PLY + 2];
 static Move counterMove[2][64][64];
 static inline void gravity(int& h, int bonus) { h += bonus - h * (bonus > 0 ? bonus : -bonus) / 16384; }
@@ -1015,12 +1016,12 @@ static int qsearch(Position& pos, int alpha, int beta, int ply) {
 
     bool inCheck = pos.inCheck();
     int best;
-    int standPat = -32001;
+    int rawQ = -32001;
     if (inCheck) {
         best = -MATE + ply;   // if no evasions found → mate
     } else {
-        standPat = (e.key == pos.key && e.eval != -32001) ? e.eval : evaluate(pos);
-        best = standPat;
+        rawQ = (e.key == pos.key && e.eval != -32001) ? e.eval : evaluate(pos);
+        best = rawQ + corrHist[pos.stm][pos.pawnKey & 16383] / 16;
         if (best >= beta) return best;
         if (best > alpha) alpha = best;
     }
@@ -1063,7 +1064,7 @@ static int qsearch(Position& pos, int alpha, int beta, int ply) {
     if (e.key != pos.key || e.depth <= 0 || (e.flag >> 2) != (ttAge & 63)) {
         e.key = pos.key; e.score = (int16_t)s2; e.move = bestMove;
         e.depth = 0; e.flag = (uint8_t)(flag | ((ttAge & 63) << 2));
-        e.eval = (int16_t)standPat;
+        e.eval = (int16_t)rawQ;
     }
     return best;
 }
@@ -1124,7 +1125,10 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
     if (depth >= 4 && !ttMove && !excluded) depth--;
 
     bool ttHit = (e.key == pos.key);
-    int staticEval = (ttHit && e.eval != -32001) ? e.eval : evaluate(pos);
+    int rawEval = (ttHit && e.eval != -32001) ? e.eval : evaluate(pos);
+    int staticEval = rawEval + corrHist[pos.stm][pos.pawnKey & 16383] / 16;
+    if (staticEval > MATE_BOUND - 1) staticEval = MATE_BOUND - 1;
+    if (staticEval < -MATE_BOUND + 1) staticEval = -MATE_BOUND + 1;
     evalStack[ply] = staticEval;
     // refine eval with TT score when its bound applies
     int refEval = staticEval;
@@ -1342,7 +1346,21 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
             || (e.flag >> 2) != (ttAge & 63)) {
             e.key = pos.key; e.score = (int16_t)s; e.move = bestMove;
             e.depth = (int8_t)depth; e.flag = (uint8_t)(flag | ((ttAge & 63) << 2));
-            e.eval = (int16_t)(inCheck ? -32001 : staticEval);
+            e.eval = (int16_t)(inCheck ? -32001 : rawEval);
+        }
+        // correction history update
+        bool bmCapture = bestMove &&
+            (pos.board[moveTo(bestMove)] != NO_PIECE || moveType(bestMove) == MT_EP);
+        if (!inCheck && !bmCapture && best > -MATE_BOUND && best < MATE_BOUND
+            && !(flag == TT_LOWER && best <= staticEval)
+            && !(flag == TT_UPPER && best >= staticEval)) {
+            int diff = best - staticEval;
+            int bonus = diff * depth / 8;
+            if (bonus > 256) bonus = 256;
+            if (bonus < -256) bonus = -256;
+            int16_t& ch = corrHist[pos.stm][pos.pawnKey & 16383];
+            int v = ch + bonus - (int)ch * (bonus > 0 ? bonus : -bonus) / 4096;
+            ch = (int16_t)v;
         }
     }
     return best;
@@ -1616,7 +1634,9 @@ static void uciLoop() {
             memset(counterMove, 0, sizeof(counterMove));
             memset(contHist, 0, sizeof(contHist));
             memset(capHist, 0, sizeof(capHist));
+            memset(corrHist, 0, sizeof(corrHist));
             memset(capHist, 0, sizeof(capHist));
+            memset(corrHist, 0, sizeof(corrHist));
         } else if (cmd == "setoption") {
             string tok, name, value;
             ss >> tok;   // "name"
@@ -1766,6 +1786,7 @@ int main(int argc, char** argv) {
     reader.detach();
     return 0;
 }
+
 
 
 
