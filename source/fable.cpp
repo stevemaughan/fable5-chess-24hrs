@@ -1478,6 +1478,12 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
             pos.unmakeMove(rl.m[i].move);
         }
     }
+    if (rootLegal == 0) {
+        if (gp.infinite)
+            while (!stopFlag && !quitFlag) this_thread::sleep_for(chrono::milliseconds(1));
+        sendLine("bestmove 0000");
+        return;
+    }
 
     for (int depth = 1; depth <= maxDepth; depth++) {
         int alpha = -MATE, beta = MATE;
@@ -1487,9 +1493,13 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
         while (true) {
             score = search(pos, depth, 0, alpha, beta, true, false);
             if (stopFlag) break;
-            if (score <= alpha) { alpha -= delta; delta *= 3; if (alpha < -MATE) alpha = -MATE; }
-            else if (score >= beta) { beta += delta; delta *= 3; if (beta > MATE) beta = MATE; }
-            else break;
+            if (score <= alpha) {
+                if (alpha <= -MATE) break;
+                alpha -= delta; delta *= 3; if (alpha < -MATE) alpha = -MATE;
+            } else if (score >= beta) {
+                if (beta >= MATE) break;
+                beta += delta; delta *= 3; if (beta > MATE) beta = MATE;
+            } else break;
         }
         if (rootBestMove) {
             if (rootBestMove == bestMove) { if (stability < 8) stability++; }
