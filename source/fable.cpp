@@ -998,6 +998,8 @@ static void scoreMoves(const Position& pos, MoveList& list, Move ttMove, int ply
         ? &contHist[pieceStack[ply - 1]][moveTo(moveStack[ply - 1])][0][0] : nullptr;
     const int16_t* ch2 = (ply >= 2 && moveStack[ply - 2])
         ? &contHist[pieceStack[ply - 2]][moveTo(moveStack[ply - 2])][0][0] : nullptr;
+    const int16_t* ch4 = (ply >= 4 && moveStack[ply - 4])
+        ? &contHist[pieceStack[ply - 4]][moveTo(moveStack[ply - 4])][0][0] : nullptr;
     for (int i = 0; i < list.n; i++) {
         Move m = list.m[i].move;
         if (m == ttMove) { list.m[i].score = 1 << 30; continue; }
@@ -1022,6 +1024,7 @@ static void scoreMoves(const Position& pos, MoveList& list, Move ttMove, int ply
             int pc = pos.board[moveFrom(m)];
             if (ch1) sc += ch1[pc * 64 + moveTo(m)];
             if (ch2) sc += ch2[pc * 64 + moveTo(m)];
+            if (ch4) sc += ch4[pc * 64 + moveTo(m)] / 2;
             list.m[i].score = sc;
         }
     }
@@ -1237,7 +1240,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
 
     // singular extension / multicut
     int singularExt = 0;
-    if (!isRoot && !excluded && depth >= 8 && ttMove && e.key == pos.key
+    if (!isRoot && !excluded && depth >= 6 && ttMove && e.key == pos.key
         && e.depth >= depth - 3 && (e.flag & 3) != TT_UPPER
         && e.score > -MATE_BOUND && e.score < MATE_BOUND) {
         int sBeta = e.score - 2 * depth;
@@ -1367,6 +1370,8 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
                             ? &contHist[pieceStack[ply - 1]][moveTo(moveStack[ply - 1])][0][0] : nullptr;
                         int16_t* uch2 = (ply >= 2 && moveStack[ply - 2])
                             ? &contHist[pieceStack[ply - 2]][moveTo(moveStack[ply - 2])][0][0] : nullptr;
+                        int16_t* uch4 = (ply >= 4 && moveStack[ply - 4])
+                            ? &contHist[pieceStack[ply - 4]][moveTo(moveStack[ply - 4])][0][0] : nullptr;
                         for (int q = 0; q < nQuiets; q++) {
                             Move qm = quietsTried[q];
                             int b = (qm == m) ? bonus : -bonus;
@@ -1374,6 +1379,7 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
                             int qpc = pos.board[moveFrom(qm)];
                             if (uch1) gravity16(uch1[qpc * 64 + moveTo(qm)], b);
                             if (uch2) gravity16(uch2[qpc * 64 + moveTo(qm)], b);
+                            if (uch4) gravity16(uch4[qpc * 64 + moveTo(qm)], b / 2);
                         }
                     }
                     break;
