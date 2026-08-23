@@ -106,3 +106,9 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 ## Hour 10 - 2026-08-22 23:49
 - SPRT v18 (corrHist) vs v17 still running (~1h40m). v19 queued.
 - Elo estimate: ~3005.
+
+## Hour 11 - 2026-08-23 00:44
+- v18 corrHist accepted earlier: +16 (1830 games). Deployed to final/.
+- SPRT v19 (singular double/neg ext, hanging pieces) vs v18 running.
+- v20 built+committed: OCB/pawnless draw scaling, single-reply instant move, root-mate fix.
+- Elo estimate: ~3020 (chain +16 on 3005).
