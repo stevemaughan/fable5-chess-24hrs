@@ -112,3 +112,7 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 - SPRT v19 (singular double/neg ext, hanging pieces) vs v18 running.
 - v20 built+committed: OCB/pawnless draw scaling, single-reply instant move, root-mate fix.
 - Elo estimate: ~3020 (chain +16 on 3005).
+
+## Hour 12 - 2026-08-23 01:39
+- SPRT v19 vs v18 still running (~1h50m). v20 queued.
+- Elo estimate: ~3020.
