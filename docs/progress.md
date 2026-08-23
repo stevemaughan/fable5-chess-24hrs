@@ -144,3 +144,9 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 - SPRT v21 vs v19 at ~2h20m, likely heading to cap (small gain either way).
 - Plan for remaining ~8h: v21 result -> TM tuning A/B (SoftDiv/IncPct) -> LMR tuning if time -> stash-30 calibration ~11:00 -> final PGO build + compliance + sanity from 12:00.
 - Elo estimate: ~3035.
+
+## Hour 18 - 2026-08-23 06:45
+- v21 vs v19: +8.8 +/-8.1 at 3000-game cap, LOS 98.4%. Deployed to final/ (also folds in v20 robustness fixes).
+- TM tuning A/B running: SoftDiv 22 + IncPct 85 vs defaults 28/75 (same binary, option override), capped 2000 games.
+- After: stash-30 calibration, PGO final build, compliance + sanity match.
+- Elo estimate: ~3045.
