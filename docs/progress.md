@@ -89,3 +89,8 @@ Assumptions noted as they arise. All decisions recorded here hourly.
   budget: 6-8 more feature/tuning tests, stash-30 calibration around hour 16,
   PGO'd final build + verification reserved for the last 2 hours.
 - Elo estimate: ~2995 (chain: 2940 anchor +27 +13 +14).
+
+## Hour 7 - 2026-08-22 21:04
+- SPRT v17 (capture LMR, history pruning, node-fraction TM, attack-unit king safety) vs v15 still running (~1h).
+- v18 (correction history) built, queued next. No other changes; keeping lineage stable while tests decide.
+- Elo estimate: ~2995 (unchanged; awaiting v17 result).
