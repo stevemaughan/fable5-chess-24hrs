@@ -131,3 +131,7 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 - SPRT v21 (v20 changes + singular depth 6 + 4-ply contHist) vs v19: RUNNING.
 - Remaining plan: v21 result (~2h) -> TM tuning A/B or stash-30 calibration -> PGO final build (last 2h reserved).
 - Elo estimate: ~3035.
+
+## Hour 15 - 2026-08-23 04:24
+- SPRT v21 vs v19 running (~1h).
+- Elo estimate: ~3035.
