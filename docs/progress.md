@@ -154,3 +154,7 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 ## Hour 19 - 2026-08-23 07:09
 - TM tuning A/B (SoftDiv 22/IncPct 85 vs 28/75) running (~50min).
 - Elo estimate: ~3045.
+
+## Hour 20 - 2026-08-23 08:04
+- LMRdiv 200 A/B running (~40min).
+- Elo estimate: ~3045.
