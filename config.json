@@ -1,15 +1,15 @@
 {
     "resign": {
-        "move_count": 1,
-        "score": 0,
-        "twosided": false,
-        "enabled": false
+        "move_count": 3,
+        "score": 500,
+        "twosided": true,
+        "enabled": true
     },
     "draw": {
-        "move_number": 0,
-        "move_count": 1,
-        "score": 0,
-        "enabled": false
+        "move_number": 40,
+        "move_count": 8,
+        "score": 10,
+        "enabled": true
     },
     "maxmoves": {
         "move_count": 1,
@@ -51,16 +51,16 @@
         "append_file": true
     },
     "sprt": {
-        "alpha": 0.0,
-        "beta": 0.0,
+        "alpha": 0.05,
+        "beta": 0.05,
         "elo0": 0.0,
-        "elo1": 0.0,
+        "elo1": 10.0,
         "model": "normalized",
-        "enabled": false
+        "enabled": true
     },
     "config_name": "config.json",
     "output": 0,
-    "seed": 11876573737491768364,
+    "seed": 17680405693711242085,
     "variant": 0,
     "type": 0,
     "gauntlet_seeds": 1,
@@ -69,7 +69,7 @@
     "wait": 0,
     "autosaveinterval": 20,
     "games": 2,
-    "rounds": 40,
+    "rounds": 750,
     "concurrency": 10,
     "force_concurrency": false,
     "recover": true,
@@ -89,12 +89,16 @@
     },
     "engines": [
         {
-            "name": "fable",
+            "name": "new",
             "dir": "",
-            "cmd": "final\\Fable5chess24hrs.exe",
+            "cmd": "source\\build\\v21.exe",
             "args": "",
             "restart": false,
             "options": [
+                [
+                    "AspD",
+                    "15"
+                ],
                 [
                     "Hash",
                     "256"
@@ -114,9 +118,9 @@
             "variant": 0
         },
         {
-            "name": "stash25",
+            "name": "old",
             "dir": "",
-            "cmd": "resources\\engines\\stash-25.0-windows-x86_64-bmi2.exe",
+            "cmd": "source\\build\\v21.exe",
             "args": "",
             "restart": false,
             "options": [
@@ -140,16 +144,16 @@
         }
     ],
     "stats": {
-        "fable vs stash25": {
-            "wins": 43,
-            "losses": 16,
-            "draws": 21,
-            "penta_WW": 7,
-            "penta_WD": 15,
-            "penta_WL": 14,
-            "penta_DD": 2,
-            "penta_LD": 2,
-            "penta_LL": 0
+        "new vs old": {
+            "wins": 379,
+            "losses": 374,
+            "draws": 747,
+            "penta_WW": 25,
+            "penta_WD": 162,
+            "penta_WL": 167,
+            "penta_DD": 212,
+            "penta_LD": 161,
+            "penta_LL": 23
         }
     }
 }

@@ -194,3 +194,19 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 - Third anchor: 20.0% vs stash-33 (~3286) -> ~3045. All anchors agree: **~3030-3045 CCRL Blitz**.
 - Last bounded A/B: AspD 15 vs 25 (1500-game cap, abort 13:20). final/ unchanged unless formal accept + full re-verification.
 - final/Fable5chess24hrs.exe = v21, verified: compliance 40/40, perft exact, standalone, 0 timeouts in 200+ verification games.
+
+## Hour 24 (final) - 2026-08-23 12:36
+- AspD 15 A/B: neutral (+1.2 +/-10.3, 1500 games). Default 25 kept. ALL testing closed.
+- ENTRY: final/Fable5chess24hrs.exe = v21 (3,413,024 bytes, built 01:53), -O3/LTO/static x86-64-v3.
+  Verified: UCI compliance 40/40, perft exact, standalone (System32-only PATH), 200+ clean
+  verification games, 0 timeouts/crashes/illegal moves across ~20,000 test games today.
+- Final estimate: **~3030-3045 CCRL Blitz** (anchors: 50.8% vs stash-25 at v8 +77 chain;
+  30.4% vs stash-30; 20.0% vs stash-33).
+- Feature summary: PEXT bitboards, PVS + TT(aging) + aspiration; null move, probcut,
+  singular/multicut/double-neg ext, IIR, RFP, razoring, futility/LMP/history/SEE pruning,
+  LMR (log, cutnode/improving/history-adjusted); ordering: TT/MVV-LVA+SEE/killers/counter/
+  history/contHist(1,2,4-ply)/capHist; corrHist eval correction; PeSTO + mobility, king
+  safety (attack units), passers(+king prox), pawn structure (cached), threats, hanging,
+  bishop pair, rook files, outposts, OCB/pawnless draw scaling; TM: soft/hard + stability
+  + score-drop + node-fraction + single-reply.
+- README.md to be written after 14:06:25 deadline.
