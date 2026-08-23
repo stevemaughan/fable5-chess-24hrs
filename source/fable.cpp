@@ -729,6 +729,7 @@ static int evaluate(const Position& pos) {
     static const int kingAttW[6] = { 0, 2, 2, 3, 5, 0 };
     PawnEntry& pe = pawnCache[pos.pawnKey & ((1 << 15) - 1)];
     if (pe.key != pos.pawnKey) fillPawnEntry(pos, pe);
+    U64 attAll[2] = { 0, 0 };
 
     for (int c = 0; c < 2; c++) {
         int sign = (c == WHITE) ? 1 : -1;
@@ -742,6 +743,7 @@ static int evaluate(const Position& pos) {
         U64 ourPawnAtt = (c == WHITE)
             ? (((ourPawns & ~FILE_A) << 7) | ((ourPawns & ~FILE_H) << 9))
             : (((ourPawns & ~FILE_A) >> 9) | ((ourPawns & ~FILE_H) >> 7));
+        attAll[c] |= ourPawnAtt;
         int theirKing = pos.kingSq(c ^ 1);
         U64 kingZone = kingAtt[theirKing] | (1ULL << theirKing);
         int attackers = 0, attackWeight = 0;
@@ -773,6 +775,7 @@ static int evaluate(const Position& pos) {
             cmg += mgTable[c * 6 + KNIGHT][s]; ceg += egTable[c * 6 + KNIGHT][s];
             phase += 1;
             U64 att = knightAtt[s];
+            attAll[c] |= att;
             minorAttAll |= att;
             int cnt = popcnt(att & mobArea);
             cmg += (cnt - 4) * 4; ceg += (cnt - 4) * 4;
@@ -790,6 +793,7 @@ static int evaluate(const Position& pos) {
             cmg += mgTable[c * 6 + BISHOP][s]; ceg += egTable[c * 6 + BISHOP][s];
             phase += 1;
             U64 att = bishopAtt(s, occ);
+            attAll[c] |= att;
             minorAttAll |= att;
             int cnt = popcnt(att & mobArea);
             cmg += (cnt - 6) * 3; ceg += (cnt - 6) * 3;
@@ -801,6 +805,7 @@ static int evaluate(const Position& pos) {
             cmg += mgTable[c * 6 + ROOK][s]; ceg += egTable[c * 6 + ROOK][s];
             phase += 2;
             U64 att = rookAtt(s, occ);
+            attAll[c] |= att;
             int cnt = popcnt(att & mobArea);
             cmg += (cnt - 7) * 2; ceg += (cnt - 7) * 4;
             int f = s & 7;
@@ -814,12 +819,14 @@ static int evaluate(const Position& pos) {
             cmg += mgTable[c * 6 + QUEEN][s]; ceg += egTable[c * 6 + QUEEN][s];
             phase += 4;
             U64 att = queenAtt(s, occ);
+            attAll[c] |= att;
             int cnt = popcnt(att & mobArea);
             cmg += (cnt - 13); ceg += (cnt - 13) * 2;
             if (att & kingZone) { attackers++; attackWeight += kingAttW[QUEEN] * popcnt(att & kingZone); }
         }
         {
             int s = pos.kingSq(c);
+            attAll[c] |= kingAtt[s];
             cmg += mgTable[c * 6 + KING][s]; ceg += egTable[c * 6 + KING][s];
             // pawn shield (mg only)
             int kf = s & 7;
@@ -852,6 +859,15 @@ static int evaluate(const Position& pos) {
         }
         mg += sign * cmg;
         eg += sign * ceg;
+    }
+
+    // hanging pieces: attacked by opponent, defended by nobody
+    for (int c = 0; c < 2; c++) {
+        int sign = (c == WHITE) ? 1 : -1;
+        U64 hang = pos.byColor[c] & ~pos.byType[KING] & attAll[c ^ 1] & ~attAll[c];
+        int n = popcnt(hang);
+        mg -= sign * 14 * n;
+        eg -= sign * 10 * n;
     }
 
     if (phase > 24) phase = 24;
@@ -1201,8 +1217,12 @@ static int search(Position& pos, int depth, int ply, int alpha, int beta, bool d
         int sScore = search(pos, (depth - 1) / 2, ply, sBeta - 1, sBeta, false, cutNode);
         excludedAt[ply] = 0;
         if (stopFlag) return 0;
-        if (sScore < sBeta) singularExt = 1;
+        if (sScore < sBeta) {
+            singularExt = 1;
+            if (!isPV && sScore < sBeta - 25) singularExt = 2;   // double extension
+        }
         else if (sBeta >= beta) return sBeta;   // multicut
+        else if (e.score >= beta) singularExt = -1;              // negative extension
     }
 
     MoveList list;
@@ -1786,6 +1806,7 @@ int main(int argc, char** argv) {
     reader.detach();
     return 0;
 }
+
 
 
 
