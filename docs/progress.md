@@ -135,3 +135,7 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 ## Hour 15 - 2026-08-23 04:24
 - SPRT v21 vs v19 running (~1h).
 - Elo estimate: ~3035.
+
+## Hour 16 - 2026-08-23 05:19
+- SPRT v21 vs v19 still running (~2h).
+- Elo estimate: ~3035.
