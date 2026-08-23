@@ -871,7 +871,35 @@ static int evaluate(const Position& pos) {
     }
 
     if (phase > 24) phase = 24;
+
+    // opposite-colored-bishops ending: halve the endgame term
+    {
+        U64 wB = pos.pieces(WHITE, BISHOP), bB = pos.pieces(BLACK, BISHOP);
+        U64 others = (pos.byType[KNIGHT] | pos.byType[ROOK] | pos.byType[QUEEN]);
+        if (!others && popcnt(wB) == 1 && popcnt(bB) == 1) {
+            int ws = lsb(wB), bs = lsb(bB);
+            if ((((ws >> 3) + (ws & 7)) & 1) != (((bs >> 3) + (bs & 7)) & 1))
+                eg /= 2;
+        }
+    }
+
     int score = (mg * phase + eg * (24 - phase)) / 24;
+
+    // pawnless winner with tiny material edge: probably a draw
+    if (score != 0) {
+        int winner = score > 0 ? WHITE : BLACK;
+        if (!pos.pieces(winner, PAWN)) {
+            int md = 0;
+            for (int c = 0; c < 2; c++) {
+                int sgn = (c == winner) ? 1 : -1;
+                md += sgn * (3 * popcnt(pos.pieces(c, KNIGHT) | pos.pieces(c, BISHOP))
+                           + 5 * popcnt(pos.pieces(c, ROOK))
+                           + 9 * popcnt(pos.pieces(c, QUEEN)));
+            }
+            if (md <= 3) score /= 4;
+        }
+    }
+
     score = (pos.stm == WHITE) ? score : -score;
     return score + 12;   // tempo
 }
@@ -1440,6 +1468,17 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
     rootBestMove = 0;
     memset(rootMoveNodes, 0, sizeof(rootMoveNodes));
 
+    int rootLegal = 0;
+    {
+        MoveList rl;
+        pos.genMoves(rl, false);
+        for (int i = 0; i < rl.n; i++) {
+            pos.makeMove(rl.m[i].move);
+            if (!pos.lastMoveIllegal()) rootLegal++;
+            pos.unmakeMove(rl.m[i].move);
+        }
+    }
+
     for (int depth = 1; depth <= maxDepth; depth++) {
         int alpha = -MATE, beta = MATE;
         int delta = P_ASPD;
@@ -1479,6 +1518,8 @@ static void iterativeDeepening(Position& pos, const GoParams& gp) {
             sendLine(out.str());
         }
         if (stopFlag) break;
+        if (rootLegal == 1 && depth >= 3 && si.hardLimitOn && gp.movetime <= 0 && gp.depth <= 0)
+            break;   // single legal reply: don't burn clock
         if (si.hardLimitOn && gp.movetime <= 0) {
             static const int stabPct[9] = { 160, 130, 115, 100, 95, 85, 80, 80, 80 };
             long long adjSoft = si.softMs * stabPct[stability] / 100;
