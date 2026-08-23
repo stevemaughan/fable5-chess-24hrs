@@ -180,3 +180,7 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 - Calibrations: 50.8% vs stash-25 at v8; 30.4% vs stash-30 at v21 -> ~3026.
 - Last bounded experiment: TM SoftDiv 34/IncPct 70 A/B (kill by 12:15 if undecided).
 - Elo estimate: **~3030 CCRL Blitz** (two-anchor consistency).
+
+## Hour 23 - 2026-08-23 10:49
+- TM SoftDiv34 A/B running (~1h10m). final/ verified and frozen unless test accepts.
+- Elo estimate: ~3030.
