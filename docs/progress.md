@@ -210,3 +210,7 @@ Assumptions noted as they arise. All decisions recorded here hourly.
   bishop pair, rook files, outposts, OCB/pawnless draw scaling; TM: soft/hard + stability
   + score-drop + node-fraction + single-reply.
 - README.md to be written after 14:06:25 deadline.
+
+## Post-deadline - 2026-08-23 14:09
+- 24h elapsed at 14:06:25. Entry locked: final/Fable5chess24hrs.exe (v21).
+- README.md written post-deadline per rules.
