@@ -116,3 +116,8 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 ## Hour 12 - 2026-08-23 01:39
 - SPRT v19 vs v18 still running (~1h50m). v20 queued.
 - Elo estimate: ~3020.
+
+## Hour 13 - 2026-08-23 02:34
+- v19 accepted earlier: +14 (2110 games). Deployed. SPRT v20 (draw scaling, single-reply, root-mate fix) vs v19 running.
+- v21 built+committed: singular depth>=6, 4-ply contHist.
+- Elo estimate: ~3035.
