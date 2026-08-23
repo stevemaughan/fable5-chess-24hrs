@@ -60,7 +60,7 @@
     },
     "config_name": "config.json",
     "output": 0,
-    "seed": 17603460390761447478,
+    "seed": 10345867236121101592,
     "variant": 0,
     "type": 0,
     "gauntlet_seeds": 1,
@@ -91,7 +91,7 @@
         {
             "name": "new",
             "dir": "",
-            "cmd": "source\\build\\v20.exe",
+            "cmd": "source\\build\\v21.exe",
             "args": "",
             "restart": false,
             "options": [
@@ -141,15 +141,15 @@
     ],
     "stats": {
         "new vs old": {
-            "wins": 3,
-            "losses": 4,
-            "draws": 11,
-            "penta_WW": 0,
-            "penta_WD": 1,
-            "penta_WL": 2,
-            "penta_DD": 4,
-            "penta_LD": 2,
-            "penta_LL": 0
+            "wins": 845,
+            "losses": 769,
+            "draws": 1386,
+            "penta_WW": 77,
+            "penta_WD": 389,
+            "penta_WL": 302,
+            "penta_DD": 318,
+            "penta_LD": 361,
+            "penta_LL": 53
         }
     }
 }
