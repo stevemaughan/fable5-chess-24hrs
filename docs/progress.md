@@ -184,3 +184,8 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 ## Hour 23 - 2026-08-23 10:49
 - TM SoftDiv34 A/B running (~1h10m). final/ verified and frozen unless test accepts.
 - Elo estimate: ~3030.
+
+## Hour 23.5 - 2026-08-23 11:15
+- TM SoftDiv34 A/B: inconclusive (+2.6 +/-9.6, 2000 games). Defaults 28/75 confirmed optimal among {22,28,34}. No change.
+- final/ FROZEN: v21 (-O3/LTO/static, plain), all verification passed. No further engine changes planned.
+- Informational anchor match vs stash-33 (~3286) running for README estimate.
