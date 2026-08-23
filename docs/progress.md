@@ -189,3 +189,8 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 - TM SoftDiv34 A/B: inconclusive (+2.6 +/-9.6, 2000 games). Defaults 28/75 confirmed optimal among {22,28,34}. No change.
 - final/ FROZEN: v21 (-O3/LTO/static, plain), all verification passed. No further engine changes planned.
 - Informational anchor match vs stash-33 (~3286) running for README estimate.
+
+## Hour 24 (approach) - 2026-08-23 11:22
+- Third anchor: 20.0% vs stash-33 (~3286) -> ~3045. All anchors agree: **~3030-3045 CCRL Blitz**.
+- Last bounded A/B: AspD 15 vs 25 (1500-game cap, abort 13:20). final/ unchanged unless formal accept + full re-verification.
+- final/Fable5chess24hrs.exe = v21, verified: compliance 40/40, perft exact, standalone, 0 timeouts in 200+ verification games.
