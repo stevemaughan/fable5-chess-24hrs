@@ -167,3 +167,7 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 ## Hour 19.3 - 2026-08-23 09:24
 - TM A/B REJECTED: SoftDiv22/IncPct85 was -14 Elo vs defaults (H0 accepted, 1282 games). Defaults kept.
 - LMRdiv 200 vs 225 A/B launched (capped 2000 games).
+
+## Hour 21.2 - 2026-08-23 09:25
+- LMRdiv 200 A/B: neutral (-1.9 +/-9.5, 2000 games). Default 225 kept. Tuning phase closed.
+- FINALIZATION: stash-30 calibration running; then PGO build + bench compare, compliance, standalone check, 60-game sanity.
