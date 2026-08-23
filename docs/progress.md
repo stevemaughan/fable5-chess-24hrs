@@ -150,3 +150,7 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 - TM tuning A/B running: SoftDiv 22 + IncPct 85 vs defaults 28/75 (same binary, option override), capped 2000 games.
 - After: stash-30 calibration, PGO final build, compliance + sanity match.
 - Elo estimate: ~3045.
+
+## Hour 19 - 2026-08-23 07:09
+- TM tuning A/B (SoftDiv 22/IncPct 85 vs 28/75) running (~50min).
+- Elo estimate: ~3045.
