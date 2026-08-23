@@ -139,3 +139,8 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 ## Hour 16 - 2026-08-23 05:19
 - SPRT v21 vs v19 still running (~2h).
 - Elo estimate: ~3035.
+
+## Hour 17 - 2026-08-23 06:14
+- SPRT v21 vs v19 at ~2h20m, likely heading to cap (small gain either way).
+- Plan for remaining ~8h: v21 result -> TM tuning A/B (SoftDiv/IncPct) -> LMR tuning if time -> stash-30 calibration ~11:00 -> final PGO build + compliance + sanity from 12:00.
+- Elo estimate: ~3035.
