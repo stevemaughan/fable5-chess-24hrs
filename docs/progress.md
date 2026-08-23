@@ -163,3 +163,7 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 - LMRdiv A/B still running (~1h35m); will cap ~2000 games. Whatever the outcome, defaults kept on inconclusive.
 - 5h07m remain. Finalization begins no later than 10:30 regardless of test state.
 - Elo estimate: ~3045.
+
+## Hour 19.3 - 2026-08-23 09:24
+- TM A/B REJECTED: SoftDiv22/IncPct85 was -14 Elo vs defaults (H0 accepted, 1282 games). Defaults kept.
+- LMRdiv 200 vs 225 A/B launched (capped 2000 games).
