@@ -73,3 +73,19 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 - Gains per feature are shrinking (normal); tests lengthening (~50 min).
   Next: v13 result → test (v14+v15) vs winner → tuning A/B via UCI options.
 - Elo estimate: ~2970 (stash-25 anchor + v11 gain).
+
+## Hours 3–6 — 2026-08-22 20:10 (backfilled; long SPRTs dominated wall-clock)
+- SPRT v13 (connected pawns, minor-on-major threats) vs v11: **+13 Elo**
+  (2356 games, 2h08m, accepted). Deployed to final/.
+- SPRT v15 (probcut + pawn-structure cache) vs v13: **+14 Elo** (2188 games,
+  1h52m, accepted). Deployed to final/. Bench on idle cores: 2.75 Mnps,
+  probcut cut bench tree ~30%.
+- sprt.ps1 now adjudicates (draw movenumber=40 movecount=8 score=10; resign
+  score=500) to shorten tests.
+- Implemented during waits: v16 (capture LMR, history pruning, node-fraction
+  time mgmt), v17 (attack-unit king safety), v18 (correction history).
+- SPRT v17 vs v15 RUNNING (v16+v17 bundle). v18 queued next.
+- Test cadence is now the limiter (~2h per +13-ish step). ~18h remain;
+  budget: 6-8 more feature/tuning tests, stash-30 calibration around hour 16,
+  PGO'd final build + verification reserved for the last 2 hours.
+- Elo estimate: ~2995 (chain: 2940 anchor +27 +13 +14).
