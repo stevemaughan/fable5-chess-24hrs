@@ -98,3 +98,7 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 ## Hour 8 - 2026-08-22 21:59
 - SPRT v17 vs v15 still running (1h52m). Waiting; v18 queued.
 - Elo estimate: ~2995 (awaiting v17 result).
+
+## Hour 9 - 2026-08-22 22:54
+- SPRT v18 (correction history) vs v17 running. v19 (singular double/neg ext, hanging pieces) built+committed, queued.
+- Elo estimate: ~3005 (2940 anchor +27+13+14+12).
