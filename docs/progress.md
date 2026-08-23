@@ -121,3 +121,7 @@ Assumptions noted as they arise. All decisions recorded here hourly.
 - v19 accepted earlier: +14 (2110 games). Deployed. SPRT v20 (draw scaling, single-reply, root-mate fix) vs v19 running.
 - v21 built+committed: singular depth>=6, 4-ply contHist.
 - Elo estimate: ~3035.
+
+## Hour 14 - 2026-08-23 03:29
+- SPRT v20 vs v19 still running (~1h30m).
+- Elo estimate: ~3035.
