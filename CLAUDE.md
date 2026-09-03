@@ -70,16 +70,16 @@ yourself starting with `docs/start_time.txt` already present, you are
   (including fast PEXT/PDEP), AVX2**. It will **not** be a Zen 1 / Zen 2 AMD
   part (which have slow microcoded PEXT). Do **not** assume AVX-512: this
   development machine (AMD Ryzen AI 9 HX PRO 375, Zen 5) has AVX-512 but the
-  target laptop may not. Compile for the `x86-64-v3` baseline (GCC:
-  `-march=x86-64-v3`, optionally plus `-mtune=znver4` or similar; Zig:
-  `-mcpu=x86_64_v3`), **never `-march=native`**.
+  target laptop may not. Compile for the `x86-64-v3` baseline
+  (`-march=x86-64-v3`, optionally plus `-mtune=znver4` or similar),
+  **never `-march=native`**.
 - The final executable must be **fully standalone**: no dependency on MinGW
   DLLs (`libstdc++-6.dll`, `libgcc_s_seh-1.dll`, `libwinpthread-1.dll`, …) or
   any other non-system DLL. Link statically (`-static` with GCC). Verify by
   running it from a plain `cmd.exe` / PowerShell with no MinGW on the PATH.
 - The executable must be built with full optimisation (e.g. `-O3`, LTO,
-  optionally PGO; Zig `-OReleaseFast`). Asserts and debug checks should be
-  compiled out of the final build.
+  optionally PGO). Asserts and debug checks should be compiled out of the
+  final build.
 
 ## Functional requirements
 
@@ -168,12 +168,10 @@ are entirely up to you.
 3. **Standard library only.** No third-party chess libraries, no external
    dependencies. The chosen language's standard library and the compiler's
    intrinsics/builtins (e.g. `_pext_u64`, `__builtin_popcountll`) are allowed.
-4. **Language: C, C++ or Zig** — your choice. Both toolchains are installed
-   and on the PATH:
+4. **Language: C or C++** — your choice. The toolchain is installed and on
+   the PATH:
    - GCC 15.2.0 (MinGW-w64, via scoop): `gcc`, `g++`
-   - Zig 0.16.0: `zig` (which also provides `zig cc` / `zig c++` as a
-     Clang-based C/C++ compiler if you prefer Clang codegen)
-   - There is **no** MSVC and **no** standalone clang on this machine.
+   - There is **no** MSVC and **no** clang on this machine.
 5. **Single deliverable:** the executable in `final/` at the 24-hour mark is
    what gets rated. Whatever is in `final/` when time runs out is your entry —
    half-finished source in `source/` earns nothing.
@@ -224,12 +222,12 @@ opening book, both colours per opening:
 ```
 resources\fastchess\fastchess.exe ^
   -engine cmd=final\Fable5chess24hrs.exe name=mine ^
-  -engine cmd=resources\engines\stash-13.0-windows-x86_64-bmi2.exe name=stash13 ^
+  -engine cmd=resources\engines\stash-20.0.1-windows-x86_64-bmi2.exe name=stash20 ^
   -each tc=10+0.1 ^
   -openings file=resources\fastchess\UHO.pgn format=pgn order=random plies=16 ^
   -rounds 200 -repeat -concurrency 10 ^
   -ratinginterval 20 -recover ^
-  -pgnout file=source\tests\mine_vs_stash13.pgn
+  -pgnout file=source\tests\mine_vs_stash20.pgn
 ```
 
 An SPRT test between two versions of your own engine (if you ever want one):
@@ -257,7 +255,7 @@ Notes:
   `-repeat` (each opening played with both colours) so the imbalance cancels.
 
 ### `resources/engines/`
-Stash versions 20, 21, 25, 30, all BMI2 Windows builds, all
+Stash versions 20, 21, 25, 30, 33, 37, all BMI2 Windows builds, all
 single-threaded UCI engines. `StashStrength.md` lists the CCRL rating of
 every Stash version (Blitz 2'+1" and 40/15). Approximate anchors for the
 versions supplied:
